@@ -55,15 +55,14 @@ process_stacks() {
 }
 
 # Check if correct number of arguments is provided
-if [ "$#" -lt 4 ]; then
-    echo "Usage: $0 <create|update> <stack1_name:template1_file> <stack2_name:template2_file> <stack3_name:template3_file>"
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <create|update> <stack_name:template_file> [<stack2_name:template2_file> ...]"
     exit 1
 fi
 
-# Extract operation and stacks
+# Extract operation and shift arguments
 operation=$1
 shift
-stacks=("$@")
 
-# Process the stacks
-process_stacks "$operation" "${stacks[@]}"
+# Call the process_stacks function with the operation and the remaining arguments
+process_stacks "$operation" "$@"

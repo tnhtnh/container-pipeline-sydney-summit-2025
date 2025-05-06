@@ -24,7 +24,7 @@ Resources:
               - 'sts:AssumeRole'
           - Effect: Allow
             Principal:
-              Federated: '{{resolve:ssm:/account/oicd:1}}'
+              Federated: '{{resolve:ssm:/account/oidc:1}}'
             Action:
               - 'sts:AssumeRoleWithWebIdentity'
             Condition:
@@ -48,17 +48,3 @@ Resources:
                   - 'iam:PutRolePolicy'
                   - 'iam:DeleteRolePolicy'
                   - 'iam:GetRole'
-                  - 'iam:GetRolePolicy'
-                  - 'iam:TagRole'
-                  - 'iam:AttachRolePolicy'
-                  - 'iam:DetachRolePolicy'
-                  - 'iam:CreateServiceLinkedRole'
-                  - 'iam:DeleteServiceLinkedRole'
-                  - 'iam:UpdateAssumeRolePolicy'
-                Resource: '*'
-
-Outputs:
-  DeploymentRoleARN:
-    Description: ARN of the Deployment Role
-    Value:
-      Fn::GetAtt: [DeploymentRole, Arn]

@@ -17,10 +17,8 @@ Resources:
   OIDCProviderParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /account/oicd
+      Name: /account/oidc
       Type: String
       Value:
         Fn::GetAtt: [GitHubOIDCProvider, Arn]
       Description: ARN of the GitHub OIDC Provider
-
-
