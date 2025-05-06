@@ -41,7 +41,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}  
           role-chaining: true      
 
-      - name: Get VPC Stack Outputs
+      - name: Get CodeGuru Stack Outputs
         id: codeguru
         run: |
           CODEGURU_BUCKET=$(aws cloudformation describe-stacks --stack-name codeguru-s3-bucket-stack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
@@ -64,7 +64,5 @@ jobs:
       - name: Upload the sarif file to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Uploading scan codeguru results
-          with: 
-            name: codeguru-results.sarif.json
-            path: codeguru-results.sarif.json
+          name: codeguru-results.sarif.json
+          path: codeguru-results.sarif.json

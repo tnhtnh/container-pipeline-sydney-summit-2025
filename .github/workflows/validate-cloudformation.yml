@@ -1,6 +1,9 @@
 name: Lint CloudFormation Templates
 on:
   push:
+    paths:
+      - 'cloudformation/*.y*ml'
+      - 'aws-oicd-setup/*.y*ml'
     branches-ignore:
       - main
 
@@ -18,4 +21,5 @@ jobs:
       - name: Print the Cloud Formation Linter Version & run Linter.
         run: |
           cfn-lint --version
-          cfn-lint -t ./cloudformation/*
+          cfn-lint -t ./cloudformation/*.y*ml
+          cfn-lint -t ./aws-oicd-setup/*.y*ml

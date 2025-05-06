@@ -1,8 +1,11 @@
 name: Shellcheck
 on:
   push:
-    branches-ignore:
-      - main
+    paths:
+      - '**/*.sh'
+  pull_request:
+    paths:
+      - '**/*.sh'
 
 jobs:
   shellcheck:
