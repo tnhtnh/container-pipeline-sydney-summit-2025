@@ -121,60 +121,6 @@ Mappings:
       AtomVmOptionsOverrides: '-Xmx4608m|-Dfile.encoding=UTF-8'
 
 Resources:
-  EFSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for EFS
-      VpcId: '{{resolve:ssm:/application/vpc/id}}'
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref ECSSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EFS-SG'
-  EFSFileSystem:
-    Type: AWS::EFS::FileSystem
-    Properties:
-      Encrypted: true
-      FileSystemTags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-EFS'
-      PerformanceMode: generalPurpose
-      ThroughputMode: bursting
-  
-  EFSAccessPoint:
-    Type: AWS::EFS::AccessPoint
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      PosixUser:
-        Uid: "1000"        # Adjust based on your application's needs
-        Gid: "1000"        # Adjust based on your application's needs
-      RootDirectory:
-        Path: "/"
-        CreationInfo:
-          OwnerUid: "1000" # Adjust based on your application's needs
-          OwnerGid: "1000" # Adjust based on your application's needs
-          Permissions: "775"
-  
-  EFSMountTarget1:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId: !Select [0, !GetAtt PrivateSubnetSplitter.Subnets]
-      SecurityGroups:
-        - !Ref EFSSecurityGroup  
-   
-  EFSMountTarget2:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId: !Select [1, !GetAtt PrivateSubnetSplitter.Subnets]
-      SecurityGroups:
-        - !Ref EFSSecurityGroup    
-     
-
   ECSAutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -362,14 +308,6 @@ Resources:
         - FARGATE
       ExecutionRoleArn: !Ref ECSTaskExecutionRole
       TaskRoleArn: !Ref ECSTaskRole
-      Volumes:
-        - Name: efs-volume
-          EFSVolumeConfiguration:
-            FilesystemId: !Ref EFSFileSystem
-            TransitEncryption: ENABLED
-            AuthorizationConfig:
-              AccessPointId: !Ref EFSAccessPoint
-              IAM: ENABLED
       ContainerDefinitions:
         # Existing application container
         - Name: !Ref Name
@@ -392,11 +330,7 @@ Resources:
             Options:
               awslogs-group: !Ref ECSLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: /ecs/${Name}
-          MountPoints:
-            - SourceVolume: efs-volume
-              ContainerPath: /mnt/${Name}   
-              ReadOnly: false
+              awslogs-stream-prefix: !Sub "/ecs/${Name}"
         # SSM Agent sidecar container
         - Name: amazon-ssm-agent
           Image: public.ecr.aws/amazon-ssm-agent/amazon-ssm-agent:latest
@@ -423,10 +357,6 @@ Resources:
               awslogs-group: !Ref ECSLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: amazon-ssm-agent
-          MountPoints:
-            - SourceVolume: efs-volume
-              ContainerPath: /mnt/${Name}   
-              ReadOnly: false
 
 
 # ... (rest of your template remains the same)
@@ -556,24 +486,6 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !GetAtt ECSLogGroup.Arn
-        - PolicyName: EFSClientPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - elasticfilesystem:ClientMount
-                  - elasticfilesystem:ClientWrite
-                  - elasticfilesystem:DescribeMountTargets
-                Resource:
-                  - !Sub "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${EFSFileSystem}"
-              - Effect: Allow
-                Action:
-                  - elasticfilesystem:ClientMount
-                  - elasticfilesystem:ClientWrite
-                  - elasticfilesystem:ClientRootAccess
-                Resource:
-                  - !Sub "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:access-point/${EFSAccessPoint}"
               - Effect: Allow
                 Action:
                   - ecs:StartTelemetrySession
@@ -617,17 +529,6 @@ Resources:
                   - ssm:GetParameter
                   - ssm:AddTagsToResource
                 Resource: '*'
-        - PolicyName: EFSAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - elasticfilesystem:ClientMount
-                  - elasticfilesystem:ClientWrite
-                  - elasticfilesystem:DescribeMountTargets
-                  - elasticfilesystem:DescribeFileSystems
-                Resource: !GetAtt EFSFileSystem.Arn
 
   ManagedECSFISRole:
     Type: AWS::IAM::Role
