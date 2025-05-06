@@ -46,5 +46,6 @@
     "automerge": true
   },
   "prCreation": "immediate",
-  "rebaseStalePrs": true
+  "rebaseStalePrs": true,
+  "ignoreTests": false
 }
