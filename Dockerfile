@@ -1,5 +1,5 @@
 # Stage 1: Update base image and prepare files
-FROM ubuntu:22.04 AS builder
+FROM ubuntu:24.04 AS builder
 
 # Update packages and install nginx
 RUN apt-get update && \
