@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for Deployment'
+
+Parameters:
+  GitHubOIDCSubject:
+    Type: String
+    Description: >-
+      The GitHub OIDC subject claim, e.g., "repo:repo-org/repo-name:*" or
+      "repo:repo-org/repo-name:environment:prod"
+
+Resources:
+  DeploymentRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: DeploymentRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+          - Effect: Allow
+            Principal:
+              Federated: '{{resolve:ssm:/account/oicd:1}}'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  Ref: GitHubOIDCSubject
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/PowerUserAccess'
+      Policies:
+        - PolicyName: DeploymentRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'iam:PassRole'
+                  - 'iam:CreateRole'
+                  - 'iam:DeleteRole'
+                  - 'iam:PutRolePolicy'
+                  - 'iam:DeleteRolePolicy'
+                  - 'iam:GetRole'
+                  - 'iam:GetRolePolicy'
+                  - 'iam:TagRole'
+                  - 'iam:AttachRolePolicy'
+                  - 'iam:DetachRolePolicy'
+                  - 'iam:CreateServiceLinkedRole'
+                  - 'iam:DeleteServiceLinkedRole'
+                  - 'iam:UpdateAssumeRolePolicy'
+                Resource: '*'
+
+Outputs:
+  DeploymentRoleARN:
+    Description: ARN of the Deployment Role
+    Value:
+      Fn::GetAtt: [DeploymentRole, Arn]

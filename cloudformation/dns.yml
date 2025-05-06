@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template to create a Route 53 hosted zone and store its ID in Parameter Store'
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: 'The domain name for the hosted zone (e.g., example.com)'
+    Default: "thisisasillyexample.click"
+
+Resources:
+  HostedZone:
+    Type: 'AWS::Route53::HostedZone'
+    Properties:
+      Name: !Ref DomainName
+
+  HostedZoneIdParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: '/dns/hosted-zone-id'
+      Type: 'String'
+      Value: !Ref HostedZone
+      Description: 'Hosted Zone ID for the domain'
+
+Outputs:
+  HostedZoneId:
+    Description: 'The ID of the created hosted zone'
+    Value: !Ref HostedZone
+  ParameterName:
+    Description: 'The name of the parameter in Parameter Store'
+    Value: '/dns/hosted-zone-id'

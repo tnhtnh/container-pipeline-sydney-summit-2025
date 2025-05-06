@@ -1,0 +1,61 @@
+name: Deploy Infrastructure
+
+on:
+#  schedule:
+#    - cron: '0 12 * * *'  # Runs at 10:00 PM AEST
+#  push:
+#    branches: [ main ]
+  workflow_dispatch:
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+env:
+  AWS_REGION: ap-southeast-2  # Change this to your preferred region
+
+
+jobs:
+  deploy-vpc:
+    concurrency:
+      group: vpc-${{ github.workflow }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/vpc-workflow.yml
+    secrets: inherit
+
+  deploy-codeguru-s3:
+    concurrency:
+      group: codeguru-bucket${{ github.workflow }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/codeguru-s3-bucket.yml
+    secrets: inherit
+  
+  deploy-ecr:
+    concurrency:
+      group: ecr-repo-${{ github.workflow }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ecr-worklow.yml
+    secrets: inherit
+
+  deploy-ecs-fargate-logging:
+    concurrency:
+      group: fargate-ecs-logging-${{ github.workflow }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ecs-fargate-logging.yml
+    secrets: inherit
+
+  build-docker-image:
+    needs: [ deploy-ecr ]
+    uses: ./.github/workflows/build-docker-image.yml
+    secrets: inherit
+    
+  deploy-ecs:
+    needs: [ deploy-vpc, deploy-ecr, build-docker-image ]
+    concurrency:
+      group: prod-depoyment-${{ github.workflow }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ecs-workflow.yml
+    with:
+      vpc-id: ${{ needs.deploy-vpc.outputs.vpc-id }}
+      public-subnets: ${{ needs.deploy-vpc.outputs.public-subnets }}
+      private-subnets: ${{ needs.deploy-vpc.outputs.private-subnets }}
+      docker-image: ${{ needs.build-docker-image.outputs.docker-image }}
+    secrets: inherit

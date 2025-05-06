@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FIS Experiments for ECS Tasks
+
+Parameters:
+  ClusterName:
+    Type: String
+  ServiceName:
+    Type: String
+  ExperimentIntervalHours:
+    Type: Number
+    Description: Interval in hours between experiments
+  ExperimentDuration:
+    Type: String
+    Description: Duration of the CPU and IO stress experiments - eg 'PT15M'
+  StopAlarmArn:
+    Type: String
+    Description: ARN of the CloudWatch Alarm to stop the experiments
+
+
+Resources:
+
+
+  FISLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/fis/logs/${AWS::StackName}'
+      RetentionInDays: 7
+
+  # IAM Role for FIS
+  FISRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'Fis-Role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - fis.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSFaultInjectionSimulatorECSAccess
+        - arn:aws:iam::aws:policy/CloudWatchLogsFullAccess
+      Policies:
+        - PolicyName: FISPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:StopTask
+                  - ecs:DescribeTasks
+                  - ecs:ListTasks
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ssm:SendCommand
+                  - ssm:GetCommandInvocation
+                  - ssm:CancelCommand
+                  - ssm:ListCommands
+                  - ssm:ListCommandInvocations
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                  - iam:GetRole
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:CreateLogDelivery
+                Resource: !GetAtt FISLogGroup.Arn
+
+  FISStopTasksExperimentTemplate:
+    Type: AWS::FIS::ExperimentTemplate
+    Properties:
+      Description: 'FIS Experiment to stop ECS tasks'
+      RoleArn: !GetAtt FISRole.Arn
+      StopConditions:
+      - Source: aws:cloudwatch:alarm
+        Value: !Ref StopAlarmArn
+      Targets:
+        Tasks:
+          ResourceType: 'aws:ecs:task'
+          SelectionMode: 'PERCENT(100)'
+          Parameters:
+            cluster: !Ref ClusterName 
+            service: !Ref ServiceName
+      Actions:
+        StopTasks:
+          ActionId: 'aws:ecs:stop-task'
+          Description: 'Stops an ECS task'
+          Parameters: {}
+          Targets:
+            Tasks: Tasks  # Map action target to template target
+      LogConfiguration:
+        CloudWatchLogsConfiguration:
+          LogGroupArn: !GetAtt FISLogGroup.Arn
+        LogSchemaVersion: 2
+      ExperimentOptions:
+        AccountTargeting: single-account
+        EmptyTargetResolutionMode: skip
+      Tags:
+        Name: 'FIS-StopTasks-Experiment'
+        Stack: !Sub '${AWS::StackName}'
+        Application: !Sub '${AWS::StackName}'
+
+  FISIOStressExperimentTemplate:
+    Type: AWS::FIS::ExperimentTemplate
+    Properties:
+      Description: 'FIS Experiment to stress IO on ECS tasks'
+      RoleArn: !GetAtt FISRole.Arn
+      StopConditions:
+      - Source: aws:cloudwatch:alarm
+        Value: !Ref StopAlarmArn
+      Targets:
+        Tasks:
+          ResourceType: 'aws:ecs:task'
+          SelectionMode: 'PERCENT(100)'
+          Parameters:
+            cluster: !Ref ClusterName 
+            service: !Ref ServiceName
+      Actions:
+        CPUStress:
+          ActionId: 'aws:ecs:task-io-stress'
+          Parameters:
+            duration: !Ref ExperimentDuration
+          Targets:
+            Tasks: Tasks  # Map action target to template target
+      LogConfiguration:
+        CloudWatchLogsConfiguration:
+          LogGroupArn: !GetAtt FISLogGroup.Arn
+        LogSchemaVersion: 2
+      ExperimentOptions:
+        AccountTargeting: single-account
+        EmptyTargetResolutionMode: skip
+      Tags:
+        Name: 'FIS-IOStress-Experiment'
+        Stack: !Sub '${AWS::StackName}'
+        Application: !Sub '${AWS::StackName}'
+
+  FISCPUStressExperimentTemplate:
+    Type: AWS::FIS::ExperimentTemplate
+    Properties:
+      Description: 'FIS Experiment to stress CPU on ECS tasks'
+      RoleArn: !GetAtt FISRole.Arn
+      StopConditions:
+      - Source: aws:cloudwatch:alarm
+        Value: !Ref StopAlarmArn
+      Targets:
+        Tasks:
+          ResourceType: 'aws:ecs:task'
+          SelectionMode: 'PERCENT(100)'
+          Parameters:
+            cluster: !Ref ClusterName 
+            service: !Ref ServiceName
+      Actions:
+        CPUStress:
+          ActionId: 'aws:ecs:task-cpu-stress'
+          Parameters:
+            duration: !Ref ExperimentDuration
+          Targets:
+            Tasks: Tasks  # Map action target to template target
+      LogConfiguration:
+        CloudWatchLogsConfiguration:
+         LogGroupArn: !GetAtt FISLogGroup.Arn
+        LogSchemaVersion: 2
+      ExperimentOptions:
+        AccountTargeting: single-account
+        EmptyTargetResolutionMode: skip
+      Tags:
+        Name: 'FIS-CPUStress-Experiment'
+        Stack: !Sub '${AWS::StackName}'
+        Application: !Sub '${AWS::StackName}'
+
+  FISExperimentStarterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'FISExperimentStarter-${AWS::StackName}'
+      Handler: index.lambda_handler
+      Role: !GetAtt FISExperimentStarterRole.Arn
+      Runtime: python3.12
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          from datetime import datetime
+
+          def json_serial(obj):
+              if isinstance(obj, datetime):
+                  return obj.isoformat()
+              raise TypeError(f"Type {type(obj)} not serializable")
+
+          def lambda_handler(event, context):
+              fis = boto3.client('fis')
+              experiment_template_id = event['experiment_template_id']
+              response = fis.start_experiment(
+                  experimentTemplateId=experiment_template_id
+              )
+              print(f"Started FIS experiment: {experiment_template_id}")
+              return json.dumps(response, default=json_serial)
+  # IAM Role for Lambda Function
+  FISExperimentStarterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'FISExperimentStarterRole-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: FISStartExperiment
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - fis:StartExperiment
+                  - fis:ListExperiments
+                  - fis:ListExperimentTemplates
+                Resource: '*'
+
+  FISCPUStressEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'FISCPUStressEventRule-${AWS::StackName}'
+      Description: 'Triggers the FIS CPU Stress experiment every X hours'
+      ScheduleExpression: !Sub 'cron(20 */${ExperimentIntervalHours} * * ? *)'
+      State: 'ENABLED'
+      Targets:
+        - Id: 'FISCPUStressTarget'
+          Arn: !GetAtt FISExperimentStarterFunction.Arn
+          Input: !Sub |
+            {
+              "experiment_template_id": "${FISCPUStressExperimentTemplate}"
+            }
+
+  FISIOStressEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'FISIOStressEventRule-${AWS::StackName}'
+      Description: 'Triggers the FIS IO Stress experiment every X hours'
+      ScheduleExpression: !Sub 'cron(40 */${ExperimentIntervalHours} * * ? *)'
+      State: 'ENABLED'
+      Targets:
+        - Id: 'FISIOStressTarget'
+          Arn: !GetAtt FISExperimentStarterFunction.Arn
+          Input: !Sub |
+            {
+              "experiment_template_id": "${FISIOStressExperimentTemplate}"
+            }
+
+  # EventBridge Rules to Schedule Experiments
+  FISStopTasksEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'FISStopTasksEventRule-${AWS::StackName}'
+      Description: 'Triggers the FIS Stop Tasks experiment every X hours'
+      ScheduleExpression: !Sub 'cron(0 */${ExperimentIntervalHours} * * ? *)'
+      State: 'ENABLED'
+      Targets:
+        - Id: 'FISStopTasksTarget'
+          Arn: !GetAtt FISExperimentStarterFunction.Arn
+          Input: !Sub |
+            {
+              "experiment_template_id": "${FISStopTasksExperimentTemplate}"
+            }
+
+  LambdaInvokePermissionEventBridgeFISStopTasks:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FISExperimentStarterFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt FISStopTasksEventRule.Arn
+
+  LambdaInvokePermissionEventBridgeFISCPUStress:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FISExperimentStarterFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt FISCPUStressEventRule.Arn
+
+  LambdaInvokePermissionEventBridgeFISIOStress:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FISExperimentStarterFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt FISIOStressEventRule.Arn

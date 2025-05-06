@@ -1,0 +1,717 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Fargate Service with ALB (VPC and subnets from SSM)
+
+Parameters:
+  Name: 
+    Type: String
+    Description: The name of the application
+
+  ContainerPort:
+    Type: Number
+    Default: 80
+    Description: Port exposed by the container
+
+  ContainerImage:
+    Type: String
+    Default: nginx:latest
+    Description: Default inital image 
+
+  MinContainers:
+    Type: Number
+    Default: 1
+    Description: Minimum number of containers
+
+  DesiredContainers:
+    Type: Number
+    Default: 2
+    Description: Desired number of containers
+
+  ScaleInCooldown:
+    Type: Number
+    Default: 60
+    Description: Cooldown period (in seconds) for scaling in
+  
+  ScaleOutCooldown:
+    Type: Number
+    Default: 60
+    Description: Cooldown period (in seconds) for scaling out
+
+  MaxContainers:
+    Type: Number
+    Default: 10
+    Description: Maximum number of containers
+
+  AutoScalingTargetCPUUtilization:
+    Type: Number
+    Default: 60
+    Description: Target CPU utilization (%)
+
+  ECSHealthCheckGracePeriod:
+    Type: Number
+    Default: 300
+    Description: Grace period (in seconds) for ECS health checks
+
+  ALBHealthCheckInterval:
+    Type: Number
+    Default: 10
+    Description: Interval (in seconds) between ALB health checks
+
+  ALBHealthCheckTimeout:
+    Type: Number
+    Default: 2
+    Description: Timeout (in seconds) for ALB health checks
+
+  ALBHealthyThresholdCount:
+    Type: Number
+    Default: 2
+    Description: Number of consecutive successful health checks to mark a target as healthy
+
+  ALBUnhealthyThresholdCount:
+    Type: Number
+    Default: 2
+    Description: Number of consecutive failed health checks to mark a target as unhealthy
+
+  ContainerHealthCheckInterval:
+    Type: Number
+    Default: 5
+    Description: Interval (in seconds) between container health checks
+
+  ContainerHealthCheckTimeout:
+    Type: Number
+    Default: 2
+    Description: Timeout (in seconds) for container health checks
+
+  ContainerHealthCheckRetries:
+    Type: Number
+    Default: 3
+    Description: Number of retries for container health checks
+
+  ContainerHealthCheckStartPeriod:
+    Type: Number
+    Default: 300
+    Description: Start period (in seconds) for container health checks
+
+  TaskSize:
+    Type: String
+    Default: tiny
+    AllowedValues:
+      - tiny
+      - small
+      - medium
+      - large
+    Description: Size of the ECS task (tiny, small, medium, large)
+
+Mappings:
+  TaskSizeMap:
+    tiny:
+      Cpu: '256'
+      Memory: '512'
+      AtomVmOptionsOverrides: '-Xmx150m|-Dfile.encoding=UTF-8'
+    small:
+      Cpu: '512'
+      Memory: '1024'
+      AtomVmOptionsOverrides: '-Xmx250m|-Dfile.encoding=UTF-8'
+    medium:
+      Cpu: '1024'
+      Memory: '2048'
+      AtomVmOptionsOverrides: '-Xmx1536m|-Dfile.encoding=UTF-8'
+    large:
+      Cpu: '2048'
+      Memory: '4096'
+      AtomVmOptionsOverrides: '-Xmx4608m|-Dfile.encoding=UTF-8'
+
+Resources:
+  EFSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EFS
+      VpcId: '{{resolve:ssm:/application/vpc/id}}'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref ECSSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EFS-SG'
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EFS'
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+  
+  EFSAccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      PosixUser:
+        Uid: "1000"        # Adjust based on your application's needs
+        Gid: "1000"        # Adjust based on your application's needs
+      RootDirectory:
+        Path: "/"
+        CreationInfo:
+          OwnerUid: "1000" # Adjust based on your application's needs
+          OwnerGid: "1000" # Adjust based on your application's needs
+          Permissions: "775"
+  
+  EFSMountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Select [0, !GetAtt PrivateSubnetSplitter.Subnets]
+      SecurityGroups:
+        - !Ref EFSSecurityGroup  
+   
+  EFSMountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SubnetId: !Select [1, !GetAtt PrivateSubnetSplitter.Subnets]
+      SecurityGroups:
+        - !Ref EFSSecurityGroup    
+     
+
+  ECSAutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: !Ref MaxContainers
+      MinCapacity: !Ref MinContainers
+      ResourceId: !Join 
+        - /
+        - - service
+          - !Ref ECSCluster
+          - !GetAtt ECSService.Name
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !GetAtt AutoScalingRole.Arn
+
+  ECSAutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: CPUScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ECSAutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: !Ref AutoScalingTargetCPUUtilization
+        ScaleInCooldown: !Ref ScaleInCooldown
+        ScaleOutCooldown: !Ref ScaleOutCooldown
+
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${AWS::StackName}
+      RetentionInDays: 30
+
+  PublicSubnetSplitter:
+    Type: Custom::SubnetSplitter
+    Properties:
+      ServiceToken: !GetAtt SubnetSplitterFunction.Arn
+      SubnetString: '{{resolve:ssm:/application/vpc/public-subnets}}'
+
+  PrivateSubnetSplitter:
+    Type: Custom::SubnetSplitter
+    Properties:
+      ServiceToken: !GetAtt SubnetSplitterFunction.Arn
+      SubnetString: '{{resolve:ssm:/application/vpc/private-subnets}}'
+
+  SubnetSplitterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Code:
+        ZipFile: |
+          import cfnresponse
+          def handler(event, context):
+            if event['RequestType'] == 'Delete':
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              return
+            subnet_string = event['ResourceProperties']['SubnetString']
+            subnets = subnet_string.split(',')
+            response_data = {'Subnets': subnets}
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ALB Security Group
+      GroupDescription: Security group for ALB
+      VpcId: '{{resolve:ssm:/application/vpc/id}}'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ECS Security Group
+      GroupDescription: Security group for ECS tasks
+      VpcId: '{{resolve:ssm:/application/vpc/id}}'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: !GetAtt PublicSubnetSplitter.Subnets
+      Type: application
+
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+#      HealthCheckPath: /_admin/liveness
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: !Ref ALBHealthCheckInterval
+      HealthCheckTimeoutSeconds: !Ref ALBHealthCheckTimeout
+      HealthyThresholdCount: !Ref ALBHealthyThresholdCount
+      UnhealthyThresholdCount: !Ref ALBUnhealthyThresholdCount
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: '{{resolve:ssm:/application/vpc/id}}'
+      TargetGroupAttributes:
+        - Key: stickiness.enabled
+          Value: 'true'
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: '86400'  # 24 hours - adjust as needed
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${Name}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled      
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 90
+          Base: 1
+        - CapacityProvider: FARGATE
+          Weight: 10
+          Base: 0
+      Configuration:
+        ExecuteCommandConfiguration:
+          Logging: DEFAULT
+
+  ECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref Name
+      Cpu: !FindInMap [TaskSizeMap, !Ref TaskSize, Cpu]
+      Memory: !FindInMap [TaskSizeMap, !Ref TaskSize, Memory]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !Ref ECSTaskExecutionRole
+      TaskRoleArn: !Ref ECSTaskRole
+      Volumes:
+        - Name: efs-volume
+          EFSVolumeConfiguration:
+            FilesystemId: !Ref EFSFileSystem
+            TransitEncryption: ENABLED
+            AuthorizationConfig:
+              AccessPointId: !Ref EFSAccessPoint
+              IAM: ENABLED
+      ContainerDefinitions:
+        # Existing application container
+        - Name: !Ref Name
+          Image: !Ref ContainerImage
+          WorkingDirectory: /mnt
+          ReadonlyRootFilesystem: false
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost/ || exit 1
+            Interval: !Ref ContainerHealthCheckInterval
+            Timeout: !Ref ContainerHealthCheckTimeout
+            Retries: !Ref ContainerHealthCheckRetries
+            StartPeriod: !Ref ContainerHealthCheckStartPeriod
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: /ecs/${Name}
+          MountPoints:
+            - SourceVolume: efs-volume
+              ContainerPath: /mnt/${Name}   
+              ReadOnly: false
+        # SSM Agent sidecar container
+        - Name: amazon-ssm-agent
+          Image: public.ecr.aws/amazon-ssm-agent/amazon-ssm-agent:latest
+          Essential: false
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - ps ax | grep amazon-ssm-agent | grep -v grep > /dev/null || exit 1
+            Interval: !Ref ContainerHealthCheckInterval
+            Timeout: !Ref ContainerHealthCheckTimeout
+            Retries: !Ref ContainerHealthCheckRetries
+            StartPeriod: !Ref ContainerHealthCheckStartPeriod
+          Command:
+            - /bin/bash
+            - -c
+            - >-
+              set -e; yum upgrade -y; yum install jq procps awscli -y; term_handler() { echo "Deleting SSM activation $ACTIVATION_ID"; if ! aws ssm delete-activation --activation-id $ACTIVATION_ID --region $ECS_TASK_REGION; then echo "SSM activation $ACTIVATION_ID failed to be deleted" 1>&2; fi; MANAGED_INSTANCE_ID=$(jq -e -r .ManagedInstanceID /var/lib/amazon/ssm/registration); echo "Deregistering SSM Managed Instance $MANAGED_INSTANCE_ID"; if ! aws ssm deregister-managed-instance --instance-id $MANAGED_INSTANCE_ID --region $ECS_TASK_REGION; then echo "SSM Managed Instance $MANAGED_INSTANCE_ID failed to be deregistered" 1>&2; fi; kill -SIGTERM $SSM_AGENT_PID; }; trap term_handler SIGTERM SIGINT; if [[ -z $MANAGED_INSTANCE_ROLE_NAME ]]; then echo "Environment variable MANAGED_INSTANCE_ROLE_NAME not set, exiting" 1>&2; exit 1; fi; if ! ps ax | grep amazon-ssm-agent | grep -v grep > /dev/null; then if [[ -n $ECS_CONTAINER_METADATA_URI_V4 ]] ; then echo "Found ECS Container Metadata, running activation with metadata"; TASK_METADATA=$(curl "${ECS_CONTAINER_METADATA_URI_V4}/task"); ECS_TASK_AVAILABILITY_ZONE=$(echo $TASK_METADATA | jq -e -r '.AvailabilityZone'); ECS_TASK_ARN=$(echo $TASK_METADATA | jq -e -r '.TaskARN'); ECS_TASK_REGION=$(echo $ECS_TASK_AVAILABILITY_ZONE | sed 's/.$//'); ECS_TASK_AVAILABILITY_ZONE_REGEX='^(af|ap|ca|cn|eu|me|sa|us|us-gov)-(central|north|(north(east|west))|south|south(east|west)|east|west)-[0-9]{1}[a-z]{1}$'; if ! [[ $ECS_TASK_AVAILABILITY_ZONE =~ $ECS_TASK_AVAILABILITY_ZONE_REGEX ]]; then echo "Error extracting Availability Zone from ECS Container Metadata, exiting" 1>&2; exit 1; fi; ECS_TASK_ARN_REGEX='^arn:(aws|aws-cn|aws-us-gov):ecs:[a-z0-9-]+:[0-9]{12}:task/[a-zA-Z0-9_-]+/[a-zA-Z0-9]+$'; if ! [[ $ECS_TASK_ARN =~ $ECS_TASK_ARN_REGEX ]]; then echo "Error extracting Task ARN from ECS Container Metadata, exiting" 1>&2; exit 1; fi; CREATE_ACTIVATION_OUTPUT=$(aws ssm create-activation --iam-role $MANAGED_INSTANCE_ROLE_NAME --tags Key=ECS_TASK_AVAILABILITY_ZONE,Value=$ECS_TASK_AVAILABILITY_ZONE Key=ECS_TASK_ARN,Value=$ECS_TASK_ARN Key=FAULT_INJECTION_SIDECAR,Value=true --region $ECS_TASK_REGION); ACTIVATION_CODE=$(echo $CREATE_ACTIVATION_OUTPUT | jq -e -r .ActivationCode); ACTIVATION_ID=$(echo $CREATE_ACTIVATION_OUTPUT | jq -e -r .ActivationId); if ! amazon-ssm-agent -register -code $ACTIVATION_CODE -id $ACTIVATION_ID -region $ECS_TASK_REGION; then echo "Failed to register with AWS Systems Manager (SSM), exiting" 1>&2; exit 1; fi; amazon-ssm-agent & SSM_AGENT_PID=$!; wait $SSM_AGENT_PID; else echo "ECS Container Metadata not found, exiting" 1>&2; exit 1; fi; else echo "SSM agent is already running, exiting" 1>&2; exit 1; fi
+          Environment:
+            - Name: MANAGED_INSTANCE_ROLE_NAME
+              Value: !Ref ManagedECSFISRole
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: amazon-ssm-agent
+          MountPoints:
+            - SourceVolume: efs-volume
+              ContainerPath: /mnt/${Name}   
+              ReadOnly: false
+
+
+# ... (rest of your template remains the same)
+  CPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Name}-CPU-Utilization
+      AlarmDescription: Alarm if CPU utilization is too high
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+        - Name: ServiceName
+          Value: !GetAtt ECSService.Name
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  MemoryUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Name}-Memory-Utilization
+      AlarmDescription: Alarm if memory utilization is too high
+      Namespace: AWS/ECS
+      MetricName: MemoryUtilization
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+        - Name: ServiceName
+          Value: !GetAtt ECSService.Name
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 90
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  TargetResponseTimeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Name}-Target-Response-Time
+      AlarmDescription: Alarm if target response time is too high
+      Namespace: AWS/ApplicationELB
+      MetricName: TargetResponseTime
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ALB.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !Ref ALBTargetGroup
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 3
+      Threshold: 4  # 4 second, adjust based on your requirements
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  HTTP5XXErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${Name}-HTTP-5XX-Error-Rate
+      AlarmDescription: Alarm if HTTP 5XX error rate is too high
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ALB.LoadBalancerFullName
+      Statistic: Sum
+      Period: 10
+      EvaluationPeriods: 3
+      Threshold: 10  # Adjust based on your tolerance for errors
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      CapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 90
+        - CapacityProvider: FARGATE
+          Weight: 10
+      ServiceName: !Sub "${Name}-service"
+      HealthCheckGracePeriodSeconds: !Ref ECSHealthCheckGracePeriod
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref ECSTaskDefinition
+      DesiredCount: !Ref DesiredContainers
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !GetAtt PrivateSubnetSplitter.Subnets
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref Name
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ECSTaskExecutionRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ECSLogGroup.Arn
+        - PolicyName: EFSClientPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                  - elasticfilesystem:DescribeMountTargets
+                Resource:
+                  - !Sub "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${EFSFileSystem}"
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                  - elasticfilesystem:ClientRootAccess
+                Resource:
+                  - !Sub "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:access-point/${EFSAccessPoint}"
+              - Effect: Allow
+                Action:
+                  - ecs:StartTelemetrySession
+                Resource: '*'
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: PassRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+        - PolicyName: SSMActivationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:CreateActivation
+                  - ssm:DeleteActivation
+                  - ssm:DeregisterManagedInstance
+                  - ssm:DescribeActivations
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                  - ssm:AddTagsToResource
+                Resource: '*'
+        - PolicyName: EFSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:ClientMount
+                  - elasticfilesystem:ClientWrite
+                  - elasticfilesystem:DescribeMountTargets
+                  - elasticfilesystem:DescribeFileSystems
+                Resource: !GetAtt EFSFileSystem.Arn
+
+  ManagedECSFISRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ssm.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: PassRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: '*'
+        - PolicyName: SSMActivationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:CreateActivation
+                  - ssm:DeleteActivation
+                  - ssm:DeregisterManagedInstance
+                  - ssm:DescribeActivations
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                  - ssm:AddTagsToResource
+                Resource: '*'
+
+  Route53HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Port: 80
+        Type: HTTP
+        ResourcePath: "/"
+        FullyQualifiedDomainName: !GetAtt ALB.DNSName
+        RequestInterval: 10
+        FailureThreshold: 3
+        MeasureLatency: true
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub "${Name}-health-check"
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ECS-APP-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+
+Outputs:
+  ALBDNSName:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt ALB.DNSName
+  ECSClusterName:
+    Description: Name of the ECS Cluster
+    Value: !Ref ECSCluster
+  ECSServiceName:
+    Description: Name of the ECS Service
+    Value: !Ref ECSService
+  ECSClusterARN:
+    Description: The ECS cluster ARN
+    Value: !GetAtt ECSCluster.Arn
+  HealthCheckAlarmArn:
+    Description: Healthy host count
+    Value: !GetAtt HTTP5XXErrorRateAlarm.Arn

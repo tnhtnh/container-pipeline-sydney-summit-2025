@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  CloudFormation template for creating an IAM Identity Provider and Role 
+  for OIDC trust
+
+
+Resources:
+  GitHubOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  OIDCProviderParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /account/oicd
+      Type: String
+      Value:
+        Fn::GetAtt: [GitHubOIDCProvider, Arn]
+      Description: ARN of the GitHub OIDC Provider
+
+

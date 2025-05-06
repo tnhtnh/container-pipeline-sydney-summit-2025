@@ -1,0 +1,39 @@
+name: Deploy ECS fargate logging
+
+on:
+  workflow_call:
+    outputs:
+      bucket-name:
+        description: "The name of the created S3 bucket"
+        value: ${{ jobs.deploy-s3-bucket.outputs.bucket-name }}
+
+env:
+  AWS_REGION: ap-southeast-2 
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+
+jobs:
+  deploy-ecs-logging:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.OICD_ROLE }}
+        role-session-name: gh-${{ github.repository_id}}-${{ github.sha }}
+        aws-region: ${{ env.AWS_REGION }}
+
+
+    - name: Deploy ECS fargate logs
+      uses: aws-actions/aws-cloudformation-github-deploy@master
+      with:
+        name: my-ecs-fargate-logs
+        template: cloudformation/ecs-fargate-logs.yml 
+        capabilities: CAPABILITY_IAM, CAPABILITY_NAMED_IAM
+        role-arn: ${{ secrets.DEPLOY_ROLE }}
+        no-fail-on-empty-changeset: "1"
+  
