@@ -7,8 +7,8 @@
     ":automergeBranch",
     ":enableVulnerabilityAlerts",
     ":semanticCommits",
-    ":prHourlyLimit4",
-    ":prConcurrentLimit10"
+    ":prHourlyLimitNone",
+    ":prConcurrentLimitNone"
   ],
   "packageRules": [
     {
@@ -21,7 +21,7 @@
     }
   ],
   "timezone": "Australia/Sydney",
-  "schedule": ["after 10pm and before 5am every weekday", "every weekend"],
+  "schedule": ["at any time"],
   "automergeType": "branch",
   "platformAutomerge": true,
   "dependencyDashboard": true,
@@ -40,7 +40,7 @@
     "commitMessageAction": "Lock file maintenance",
     "commitMessageTopic": null,
     "commitMessageExtra": null,
-    "schedule": ["after 10pm and before 5am every weekday", "every weekend"],
+    "schedule": ["at any time"],
     "groupName": null,
     "prBodyDefinitions": {"Change": "All locks refreshed"},
     "automerge": true
