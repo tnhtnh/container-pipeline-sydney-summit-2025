@@ -7,6 +7,18 @@
     ":prHourlyLimitNone",
     ":prConcurrentLimitNone"
   ],
+  "timezone": "Australia/Sydney",
+  "schedule": ["at any time"],
+  
+  "automerge": true,
+  "automergeType": "pr",
+  "platformAutomerge": true,
+  "autoApprove": true,
+  
+  "dependencyDashboard": true,
+  "dependencyDashboardAutoclose": true,
+  
+  "rangeStrategy": "replace",
   "packageRules": [
     {
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
@@ -17,19 +29,12 @@
       "automerge": true
     }
   ],
-  "timezone": "Australia/Sydney",
-  "schedule": ["at any time"],
-  "automergeType": "pr",
-  "platformAutomerge": true,
-  "autoApprove": true,
-  "dependencyDashboard": true,
-  "dependencyDashboardAutoclose": true,
+
   "vulnerabilityAlerts": {
     "labels": ["security"],
-    "assignees": ["@tnh"],
-    "automerge": true
+    "assignees": ["@tnh"]
   },
-  "rangeStrategy": "bump",
+  
   "lockFileMaintenance": {
     "enabled": true,
     "recreateWhen": "always",
@@ -40,10 +45,15 @@
     "commitMessageExtra": null,
     "schedule": ["at any time"],
     "groupName": null,
-    "prBodyDefinitions": {"Change": "All locks refreshed"},
-    "automerge": true
+    "prBodyDefinitions": {"Change": "All locks refreshed"}
   },
+  
   "prCreation": "immediate",
   "rebaseStalePrs": true,
-  "ignoreTests": false
+  "ignoreTests": false,
+  
+  "ignoreUnstable": true,
+  "separateMajorMinor": false,
+  "separateMinorPatch": false,
+  "respectLatest": false
 }
