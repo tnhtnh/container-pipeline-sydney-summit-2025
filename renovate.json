@@ -2,9 +2,6 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:base",
-    ":automergePatch",
-    ":automergeMinor",
-    ":automergeBranch",
     ":enableVulnerabilityAlerts",
     ":semanticCommits",
     ":prHourlyLimitNone",
@@ -22,8 +19,9 @@
   ],
   "timezone": "Australia/Sydney",
   "schedule": ["at any time"],
-  "automergeType": "pr-comment",
+  "automergeType": "pr",
   "platformAutomerge": true,
+  "autoApprove": true,
   "dependencyDashboard": true,
   "dependencyDashboardAutoclose": true,
   "vulnerabilityAlerts": {
