@@ -22,7 +22,7 @@
   ],
   "timezone": "Australia/Sydney",
   "schedule": ["at any time"],
-  "automergeType": "branch",
+  "automergeType": "pr-comment",
   "platformAutomerge": true,
   "dependencyDashboard": true,
   "dependencyDashboardAutoclose": true,
