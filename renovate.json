@@ -55,5 +55,9 @@
   "ignoreUnstable": true,
   "separateMajorMinor": false,
   "separateMinorPatch": false,
-  "respectLatest": false
+  "respectLatest": false,
+  "assigneesFromCodeOwners": false,
+  "reviewersFromCodeOwners": false,
+  "ignoreReviewers": true,
+  "assignees": []
 }
