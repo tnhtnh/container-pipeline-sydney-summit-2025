@@ -1,20 +1,31 @@
-FROM python:3.9-slim
+FROM python:3.9-slim AS builder
 
 WORKDIR /app
+COPY requirements.txt requirements-dev.txt ./
+COPY app.py test_app.py ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN pytest test_app.py
 
-# Copy requirements file and install dependencies
-COPY requirements.txt .
+FROM python:3.9-slim
+RUN apt-get update && apt-get install -y curl
+
+WORKDIR /app
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY app.py test_app.py ./
-
-# Set build argument for git SHA
+# Copy only app.py from builder stage (forces builder to succeed)
+COPY --from=builder /app/app.py ./
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
-# Expose port the app runs on
-EXPOSE 5000
+HEALTHCHECK --interval=15s --timeout=3s \
+  CMD curl -f http://localhost/healthcheck || exit 1
 
-# Command to run the application
+LABEL git_sha=$GIT_SHA
+LABEL maintainer="your-email@example.com"
+LABEL version="1.0"
+LABEL description="Example container with AWS Inspector scanning"
+
+EXPOSE 80
+
 CMD ["python", "app.py"]
