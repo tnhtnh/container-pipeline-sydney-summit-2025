@@ -58,6 +58,6 @@
   "respectLatest": false,
   "assigneesFromCodeOwners": false,
   "reviewersFromCodeOwners": false,
-  "ignoreReviewers": true,
+  "ignoreReviewers": ["@tnh", "@amazon-q-developer"],
   "assignees": []
 }
