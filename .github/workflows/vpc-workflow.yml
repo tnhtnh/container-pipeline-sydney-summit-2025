@@ -15,6 +15,8 @@ on:
 env:
   AWS_REGION: ap-southeast-2 
   VPC_STACK_NAME: vpc-abstraction-stack
+  LANDING_ZONE_NAME: ${{ vars.LANDING_ZONE_NAME }}
+  VPC_NAME: ${{ vars.VPC_NAME }}
 permissions:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
@@ -43,8 +45,12 @@ jobs:
         template: cloudformation/vpc-landingzone-abstraction.yml
         role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
+        parameter-overrides: >-
+          LandingZoneName="${{ env.LANDING_ZONE_NAME }}"
+          VpcName="${{ env.VPC_NAME }}"
+          NumberOfSubnets=3
     
-  
+    
     # - name: Deploy VPC Stack
     #   uses: aws-actions/aws-cloudformation-github-deploy@master
     #   with:

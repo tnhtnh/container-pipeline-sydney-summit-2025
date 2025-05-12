@@ -9,6 +9,7 @@ on:
 
 env:
   AWS_REGION: ap-southeast-2 
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 permissions:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
@@ -31,8 +32,10 @@ jobs:
     - name: Deploy ECR Repo
       uses: aws-actions/aws-cloudformation-github-deploy@master
       with:
-        name: my-ecr-repo
+        name: ecr-repo-${{ env.ECR_REPOSITORY }}
         template: cloudformation/ecr.yml 
         capabilities: CAPABILITY_IAM
         role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
+        parameter-overrides: >-
+          RepositoryName="${{ env.ECR_REPOSITORY }}"

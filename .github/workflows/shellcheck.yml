@@ -17,6 +17,3 @@ jobs:
       - name: Run shellcheck
         uses: ludeeus/action-shellcheck@master
   
-      - name: test 
-        run: |
-          echo ${{ secrets.OICD_ROLE }} | rev
