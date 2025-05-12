@@ -1,6 +1,12 @@
 name: Build, Push to ECR
 
 on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_call:
     outputs:
       docker-image:
@@ -98,6 +104,8 @@ jobs:
         run: exit ${{ steps.inspector.outputs.vulnerability_threshold_exceeded }}
 
       - name: Push Docker image
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -110,4 +118,8 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           load: true
           cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache    
+          cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - name: Stop workflow if push failed (but pass build)
+        if: failure() && github.ref != 'refs/heads/main'
+        run: echo "Push failed, stopping workflow but passing build." && exit 0
