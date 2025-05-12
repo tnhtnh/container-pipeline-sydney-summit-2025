@@ -42,7 +42,6 @@ jobs:
         name: my-ecs-stack
         template: cloudformation/ecs.yml
         capabilities: CAPABILITY_IAM, CAPABILITY_AUTO_EXPAND
-        role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
         parameter-overrides: >-
           Name="example",
@@ -73,7 +72,6 @@ jobs:
         name: fis-stack
         template: cloudformation/fis.yml
         capabilities: CAPABILITY_IAM, CAPABILITY_AUTO_EXPAND, CAPABILITY_NAMED_IAM
-        role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
         parameter-overrides: >-
           ClusterName="example-cluster",

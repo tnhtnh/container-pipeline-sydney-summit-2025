@@ -43,11 +43,10 @@ jobs:
       with:
         name: ${{ env.VPC_STACK_NAME }}
         template: cloudformation/vpc-landingzone-abstraction.yml
-        role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
         parameter-overrides: >-
-          LandingZoneName="${{ env.LANDING_ZONE_NAME }}"
-          VpcName="${{ env.VPC_NAME }}"
+          LandingZoneName="${{ env.LANDING_ZONE_NAME }}",
+          VpcName="${{ env.VPC_NAME }}",
           NumberOfSubnets=3
     
     
@@ -57,5 +56,14 @@ jobs:
     #     name: ${{ env.VPC_STACK_NAME }}
     #     template: cloudformation/vpc.yml
     #     capabilities: CAPABILITY_IAM
-    #     role-arn: ${{ secrets.DEPLOY_ROLE }}
     #     no-fail-on-empty-changeset: "1"
+
+    - name: Get VPC Stack Outputs
+      id: vpc-outputs
+      run: |
+        VPC_ID=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='VpcId'].OutputValue" --output text)
+        PUBLIC_SUBNETS=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='PublicSubnets'].OutputValue" --output text)
+        PRIVATE_SUBNETS=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='PrivateSubnets'].OutputValue" --output text)
+        echo "vpc-id=${VPC_ID}" >> $GITHUB_OUTPUT
+        echo "public-subnets=${PUBLIC_SUBNETS}" >> $GITHUB_OUTPUT
+        echo "private-subnets=${PRIVATE_SUBNETS}" >> $GITHUB_OUTPUT
