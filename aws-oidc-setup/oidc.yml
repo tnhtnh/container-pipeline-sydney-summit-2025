@@ -1,8 +1,10 @@
+# Example OIDC trust setup for GitHub Actions for repo tnhtnh/container-pipeline-sydney-summit-2025
+# NOTE: This is an example. Customize for your environment and security requirements.
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  CloudFormation template for creating an IAM Identity Provider and Role 
-  for OIDC trust
-
+  EXAMPLE: CloudFormation template for creating an IAM Identity Provider and Role
+  for OIDC trust for repo tnhtnh/container-pipeline-sydney-summit-2025.
+  Customize for your environment.
 
 Resources:
   GitHubOIDCProvider:

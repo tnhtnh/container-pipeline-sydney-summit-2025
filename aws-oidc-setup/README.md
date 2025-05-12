@@ -1,6 +1,6 @@
 # aws-oidc-setup
 
-This provides example CloudFormation on how to initially set up an OIDC trust between the account and GitHub
+This provides example CloudFormation on how to initially set up an OIDC trust between an AWS account and GitHub Actions for CI/CD. **This is an example setup for the repo `tnhtnh/container-pipeline-sydney-summit-2025`. You should customize it for your own environment and security requirements.**
 
 ## GitHub Actions and OIDC trust
 
@@ -8,13 +8,12 @@ The CloudFormation `oidc.yml` sets up an OIDC trust between AWS and GitHub Actio
 
 ### How to use
 
-1. Deploy the CloudFormation stack in the region in your account
-2. Provide the GitHub repo name and OIDC claims that you want to use
+1. Deploy the CloudFormation stack in your AWS account and region.
+2. Provide the GitHub repo name and OIDC claims that you want to use.
 
 #### Example
 
-If you are wanting to generate an OIDC trust for GitHub repo https://github.com/bjss/example-aws-sam-app, use "repo:bjss/example-aws-sam-app:*" as the subject claim.
-
+If you are generating an OIDC trust for the GitHub repo https://github.com/tnhtnh/container-pipeline-sydney-summit-2025, use `repo:tnhtnh/container-pipeline-sydney-summit-2025:*` as the subject claim.
 
 ### References
 
