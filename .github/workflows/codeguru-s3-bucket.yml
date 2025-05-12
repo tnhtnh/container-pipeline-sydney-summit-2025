@@ -33,7 +33,6 @@ jobs:
       with:
         name: codeguru-s3-bucket-stack
         template: cloudformation/codeguru-bucket.yml
-        role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
 
     - name: Get S3 Bucket Name

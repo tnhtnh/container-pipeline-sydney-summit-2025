@@ -35,7 +35,6 @@ jobs:
         name: ecr-repo-${{ env.ECR_REPOSITORY }}
         template: cloudformation/ecr.yml 
         capabilities: CAPABILITY_IAM
-        role-arn: ${{ secrets.DEPLOY_ROLE }}
         no-fail-on-empty-changeset: "1"
         parameter-overrides: >-
           RepositoryName="${{ env.ECR_REPOSITORY }}"
