@@ -16,13 +16,13 @@ permissions:
       id-token: write   # This is required for requesting the JWT
       contents: read    # This is required for actions/checkout
 env:
-  AWS_REGION: ap-southeast-2  # Change this to your AWS region
-  ECR_REPOSITORY:  ${{ vars.ECR_REPOSITORY }}
-  CRITICAL_THRESHOLD: 6
-  HIGH_THRESHOLD: 8
-  MEDIUM_THRESHOLD: 9
-  LOW_THRESHOLD: 10
-  OTHER_THRESHOLD: 20
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'my-ecr-repo' }}
+  CRITICAL_THRESHOLD: ${{ vars.CRITICAL_THRESHOLD || 6 }}
+  HIGH_THRESHOLD: ${{ vars.HIGH_THRESHOLD || 8 }}
+  MEDIUM_THRESHOLD: ${{ vars.MEDIUM_THRESHOLD || 9 }}
+  LOW_THRESHOLD: ${{ vars.LOW_THRESHOLD || 10 }}
+  OTHER_THRESHOLD: ${{ vars.OTHER_THRESHOLD || 20 }}
 
 
 jobs:
