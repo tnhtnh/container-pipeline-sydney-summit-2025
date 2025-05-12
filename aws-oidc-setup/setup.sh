@@ -64,7 +64,5 @@ fi
 operation=$1
 shift
 
-# here 
-
 # Call the process_stacks function with the operation and the remaining arguments
 process_stacks "$operation" "$@"
