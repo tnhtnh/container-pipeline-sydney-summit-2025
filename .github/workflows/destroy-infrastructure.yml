@@ -31,15 +31,7 @@ jobs:
           role-to-assume: ${{ secrets.OICD_ROLE }}  # Ensure this secret has permissions to delete stacks
           role-session-name: destroy-session-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
-  
-      # Step 3: Role Chaining into Deployment Role (if required)
-      - name: Rolechain into Deployment Role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.DEPLOY_ROLE }}
-          role-session-name: gh-rm-${{ github.repository_id }}-${{ github.sha }}
-          aws-region: ${{ env.AWS_REGION }}  
-          role-chaining: true     
+   
 
       - name: Delete ECR Repositories and Images
         run: |
