@@ -1,18 +1,25 @@
+# Example IAM Role for OIDC deployment from GitHub Actions for repo tnhtnh/container-pipeline-sydney-summit-2025
+# NOTE: This is an example. You should customize RoleName, permissions, and OIDC subject for your environment.
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IAM Role for Deployment'
+Description: >-
+  EXAMPLE: IAM Role for Deployment via OIDC for repo
+  tnhtnh/container-pipeline-sydney-summit-2025. Customize for your environment.
 
 Parameters:
   GitHubOIDCSubject:
     Type: String
     Description: >-
-      The GitHub OIDC subject claim, e.g., "repo:repo-org/repo-name:*" or
-      "repo:repo-org/repo-name:environment:prod"
+      The GitHub OIDC subject claim, e.g.,
+      "repo:tnhtnh/container-pipeline-sydney-summit-2025:*" or
+      "repo:tnhtnh/container-pipeline-sydney-summit-2025:environment:prod".
+      Customize as needed.
 
 Resources:
   DeploymentRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: DeploymentRole
+      RoleName: DeploymentRole-Example-ContainerPipelineSydneySummit2025  # Example
+        # role name, customize for your org
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -34,17 +41,5 @@ Resources:
                 token.actions.githubusercontent.com:sub:
                   Ref: GitHubOIDCSubject
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/PowerUserAccess'
-      Policies:
-        - PolicyName: DeploymentRole
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'iam:PassRole'
-                  - 'iam:CreateRole'
-                  - 'iam:DeleteRole'
-                  - 'iam:PutRolePolicy'
-                  - 'iam:DeleteRolePolicy'
-                  - 'iam:GetRole'
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'  # Example: use least
+          # privilege in production
