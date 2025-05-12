@@ -36,14 +36,6 @@ jobs:
         role-session-name: gh-${{ github.repository_id}}-${{ github.sha }}
         aws-region: ${{ env.AWS_REGION }}
 
-    - name: Rolechain into deployment role
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        role-to-assume: ${{ secrets.DEPLOY_ROLE }}
-        role-session-name: gh-d-${{ github.repository_id}}-${{ github.sha }}
-        aws-region: ${{ env.AWS_REGION }}  
-        role-chaining: true      
-
     - name: Deploy ECS Infrastucture
       uses: aws-actions/aws-cloudformation-github-deploy@master
       with:

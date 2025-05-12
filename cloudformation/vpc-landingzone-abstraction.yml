@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC with Public and Private Subnets, NAT Gateways, SSM Parameters, and VPC Endpoints for ECR, ECS, Systems Manager, EFS, S3, and Fault Injection Simulator
+
+Parameters:
+  LandingZoneName:
+    Type: String
+    Default: LandingZone
+    Description: Name of the Landing Zone
+
+  VpcName:
+    Type: String
+    Default: VPC
+    Description: Name of the VPC
+  
+  NumberOfSubnets:
+    Type: Number
+    AllowedValues: [2, 3]
+    Default: 3
+    Description: Number of subnets that were created
+
+Conditions:
+  IsThreeSubnets: !Equals [!Ref NumberOfSubnets, 3]
+  IsTwoSubnets: !Equals [!Ref NumberOfSubnets, 2]
+
+Resources:
+  VpcIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /application/vpc/id
+      Type: String
+      Value: !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/id}}"
+      Description: VPC ID for the application
+      Tier: Standard
+
+  PublicSubnetIdsParameterThreeSubnets:
+    Condition: IsThreeSubnets
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /application/vpc/public-subnets
+      Type: String
+      Value: !Join 
+        - "," 
+        - 
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Public-A/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Public-B/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Public-C/id}}"
+      Description: Public Subnet IDs for the application (3 subnets)
+      Tier: Standard
+
+  PrivateSubnetIdsParameterThreeSubnets:
+    Condition: IsThreeSubnets
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /application/vpc/private-subnets
+      Type: String
+      Value: !Join 
+        - ","
+        - 
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Private-A/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Private-B/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Private-C/id}}"
+      Description: Private Subnet IDs for the application (3 subnets)
+      Tier: Standard
+
+  PublicSubnetIdsParameterTwoSubnets:
+    Condition: IsTwoSubnets
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /application/vpc/public-subnets
+      Type: String
+      Value: !Join 
+        - ","
+        - 
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Public-A/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Public-B/id}}"
+      Description: Public Subnet IDs for the application (2 subnets)
+      Tier: Standard
+
+  PrivateSubnetIdsParameterTwoSubnets:
+    Condition: IsTwoSubnets
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /application/vpc/private-subnets
+      Type: String
+      Value: !Join 
+        - ","
+        - 
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Private-A/id}}"
+          - !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/subnet/${VpcName}-Private-B/id}}"
+      Description: Private Subnet IDs for the application (2 subnets)
+      Tier: Standard
+
+
+Outputs:
+  VpcId:
+    Value: !Sub "{{resolve:ssm:/${LandingZoneName}/network/vpc/${VpcName}/id}}"
+    Description: VPC ID for the application
+
+  PublicSubnetIds:
+    Value: !Ref LandingZoneName
+
+  PrivateSubnetIds:
+    Value: !Ref LandingZoneName
