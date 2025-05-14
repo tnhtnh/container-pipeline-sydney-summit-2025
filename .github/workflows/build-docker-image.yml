@@ -105,7 +105,6 @@ jobs:
 
       - name: Push Docker image
         if: github.ref == 'refs/heads/main'
-        continue-on-error: true
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -118,7 +117,3 @@ jobs:
           load: true
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
-
-      - name: Stop workflow if push failed (but pass build)
-        if: failure() && github.ref != 'refs/heads/main'
-        run: echo "Push failed, stopping workflow but passing build." && exit 0
