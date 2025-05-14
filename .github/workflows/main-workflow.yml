@@ -1,10 +1,10 @@
 name: Deploy Infrastructure
 
 on:
-#  schedule:
-#    - cron: '0 12 * * *'  # Runs at 12:00 PM AEST
-#  push:
-#    branches: [ main ]
+  schedule:
+    - cron: '0 12 * * *'  # Runs at 12:00 PM AEST
+  push:
+    branches: [ main ]
   workflow_dispatch:
 permissions:
       id-token: write   # This is required for requesting the JWT
