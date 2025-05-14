@@ -32,6 +32,39 @@ Resources:
               SSEAlgorithm: AES256
 
   # IAM Role for Lambda Function
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template to create a private S3 bucket for CodeGuru Reviewer'
+
+Resources:
+  # S3 Bucket Definition
+  CodeGuruReviewerBucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Join 
+        - '-'
+        - - 'codeguru-reviewer'
+          - !Select 
+            - 0
+            - !Split 
+              - '-'
+              - !Select 
+                - 2
+                - !Split 
+                  - '/'
+                  - !Ref 'AWS::StackId'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # IAM Role for Lambda Function
   EmptyS3BucketLambdaRole:
     Type: 'AWS::IAM::Role'
     Properties:
