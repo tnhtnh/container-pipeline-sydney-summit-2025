@@ -39,22 +39,29 @@ jobs:
         run: |
           CODEGURU_BUCKET=$(aws cloudformation describe-stacks --stack-name codeguru-s3-bucket-stack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
           echo "codeguru-bucket=${CODEGURU_BUCKET}" >> $GITHUB_OUTPUT
+          if [ -z "$CODEGURU_BUCKET" ]; then
+            echo "bucket_found=false" >> $GITHUB_OUTPUT
+          else
+            echo "bucket_found=true" >> $GITHUB_OUTPUT
+          fi
 
       # Step 2: Add CodeGuru Reviewer Action
       - name: CodeGuru Reviewer
+        if: steps.codeguru.outputs.bucket_found == 'true'
         uses: aws-actions/codeguru-reviewer@v1.1
         with:
           s3_bucket: ${{ steps.codeguru.outputs.codeguru-bucket }} 
       
       # Step 3: Upload results into GitHub
       - name: Upload review result
-        if: ${{ github.event_name != 'push' }}
+        if: steps.codeguru.outputs.bucket_found == 'true' && ${{ github.event_name != 'push' }}
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: codeguru-results.sarif.json
         continue-on-error: true
 
       - name: Upload the sarif file to Artifacts
+        if: steps.codeguru.outputs.bucket_found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: codeguru-results.sarif.json
