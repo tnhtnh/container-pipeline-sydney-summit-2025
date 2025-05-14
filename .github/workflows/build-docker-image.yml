@@ -114,7 +114,6 @@ jobs:
           build-args: |
             GIT_SHA=${{ github.sha }}
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           load: true
           cache-from: type=local,src=/tmp/.buildx-cache
