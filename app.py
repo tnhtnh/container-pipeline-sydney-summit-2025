@@ -12,5 +12,9 @@ def index():
 def healthcheck():
     return jsonify({"status": "OK"})
 
+@app.route('/summit')
+def summit():
+    return jsonify({"message": "I hope you are enjoying this talk"})
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
