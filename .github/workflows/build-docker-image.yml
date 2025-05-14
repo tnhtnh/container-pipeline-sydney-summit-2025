@@ -55,7 +55,8 @@ jobs:
         run: |
           cat <<EOF >> $GITHUB_STEP_SUMMARY
           # Current configured risk thresholds
-          | Threshold Type      | Value                         |
+          If the number of vulnerabilities in the image exceeds the threshold for the severity, the workflow will fail.
+          | Severity      | Count                         |
           |---------------------|------------------------------|
           | ❌ Critical         | ${{ env.CRITICAL_THRESHOLD }} |
           | ❗ High             | ${{ env.HIGH_THRESHOLD }}     |
