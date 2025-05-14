@@ -51,6 +51,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx
 
+      - name: Display risk thresholds
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          # Current configured risk thresholds
+          | Threshold Type      | Value                         |
+          |---------------------|------------------------------|
+          | ❌ Critical         | ${{ env.CRITICAL_THRESHOLD }} |
+          | ❗ High             | ${{ env.HIGH_THRESHOLD }}     |
+          | ❓ Medium           | ${{ env.MEDIUM_THRESHOLD }}   |
+          | 🔷 Low              | ${{ env.LOW_THRESHOLD }}      |
+          | 🟡 Other            | ${{ env.OTHER_THRESHOLD }}    |
+          EOF
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
