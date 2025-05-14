@@ -37,7 +37,7 @@ jobs:
       - name: Get CodeGuru Stack Outputs
         id: codeguru
         run: |
-          CODEGURU_BUCKET=$(aws cloudformation describe-stacks --stack-name codeguru-s3-bucket-stack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
+          CODEGURU_BUCKET=$(aws cloudformation describe-stacks --stack-name codeguru-s3-bucket-stack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text 2>/dev/null) || true
           echo "codeguru-bucket=${CODEGURU_BUCKET}" >> $GITHUB_OUTPUT
           if [ -z "$CODEGURU_BUCKET" ]; then
             echo "bucket_found=false" >> $GITHUB_OUTPUT
