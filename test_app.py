@@ -42,3 +42,16 @@ def test_healthcheck_endpoint(client):
     
     # Verify response content
     assert data == {"status": "OK"}
+    
+def test_summit_endpoint(client):
+    # Make the request to the summit endpoint
+    response = client.get('/summit')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Parse response data
+    data = json.loads(response.data)
+    
+    # Verify response content
+    assert data == {"message": "I hope you are enjoying this talk"}
