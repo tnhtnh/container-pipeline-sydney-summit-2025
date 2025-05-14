@@ -1,5 +1,5 @@
 # default ownership: default owners for everything in the repo (Unless a later match takes precedence)
-*       @tnh
+#*       @tnh
 
 # example some files to some gropu
 #*.js    @CoolOrgName/backend

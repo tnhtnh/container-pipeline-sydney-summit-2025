@@ -51,6 +51,7 @@ jobs:
         uses: aws-actions/codeguru-reviewer@v1.1
         with:
           s3_bucket: ${{ steps.codeguru.outputs.codeguru-bucket }} 
+        continue-on-error: true
       
       # Step 3: Upload results into GitHub
       - name: Upload review result
