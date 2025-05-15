@@ -122,6 +122,7 @@ jobs:
       - name: Push Docker image
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v6
+        continue-on-error: ${{ github.event_name == 'schedule' }}
         with:
           context: .
           file: ./Dockerfile
