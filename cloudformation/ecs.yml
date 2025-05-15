@@ -312,8 +312,7 @@ Resources:
         # Existing application container
         - Name: !Ref Name
           Image: !Ref ContainerImage
-          WorkingDirectory: /mnt
-          ReadonlyRootFilesystem: false
+          ReadonlyRootFilesystem: true
           Essential: true
           PortMappings:
             - ContainerPort: !Ref ContainerPort
