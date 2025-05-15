@@ -18,9 +18,9 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'my-ecr-repo' }}
-  CRITICAL_THRESHOLD: ${{ vars.CRITICAL_THRESHOLD || 6 }}
-  HIGH_THRESHOLD: ${{ vars.HIGH_THRESHOLD || 8 }}
-  MEDIUM_THRESHOLD: ${{ vars.MEDIUM_THRESHOLD || 9 }}
+  CRITICAL_THRESHOLD: ${{ vars.CRITICAL_THRESHOLD || 0 }}
+  HIGH_THRESHOLD: ${{ vars.HIGH_THRESHOLD || 0 }}
+  MEDIUM_THRESHOLD: ${{ vars.MEDIUM_THRESHOLD || 10 }}
   LOW_THRESHOLD: ${{ vars.LOW_THRESHOLD || 10 }}
   OTHER_THRESHOLD: ${{ vars.OTHER_THRESHOLD || 20 }}
 
