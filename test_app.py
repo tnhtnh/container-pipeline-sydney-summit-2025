@@ -110,3 +110,50 @@ def test_run_command_injection_scenario(mock_check_output, client):
     
     # Verify that subprocess was called with the malicious command
     mock_check_output.assert_called_once_with(malicious_command, shell=True, text=True)
+
+def test_diagnostics_endpoint(client, monkeypatch):
+    """
+    Test the diagnostics endpoint that provides environment information
+    for troubleshooting deployment issues.
+    """
+    # Set test environment variables
+    test_vars = {
+        'APP_VERSION': '1.0.0',
+        'APP_ENV': 'testing',
+        'TEST_CONFIG': 'sample-value'
+    }
+    
+    # Add test environment variables
+    for key, value in test_vars.items():
+        monkeypatch.setenv(key, value)
+    
+    # Test without filter parameter (full environment)
+    response = client.get('/api/diagnostics')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Parse response data
+    data = json.loads(response.data)
+    
+    # Verify diagnostics key exists in response
+    assert "diagnostics" in data
+    
+    # Verify our test variables are included in the response
+    for key, value in test_vars.items():
+        assert data["diagnostics"].get(key) == value
+    
+    # Test with filter parameter
+    response = client.get('/api/diagnostics?filter=APP')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Parse response data
+    data = json.loads(response.data)
+    
+    # Verify filtered results
+    assert "diagnostics" in data
+    assert "APP_VERSION" in data["diagnostics"]
+    assert "APP_ENV" in data["diagnostics"]
+    assert "TEST_CONFIG" not in data["diagnostics"]

@@ -29,5 +29,26 @@ def run_command():
     result = subprocess.check_output(command, shell=True, text=True)
     return jsonify({"result": result})
 
+@app.route('/api/diagnostics')
+def diagnostics():
+    """
+    Returns diagnostic information about the application environment.
+    Used for troubleshooting deployment and configuration issues.
+    """
+    # Get request parameter for filtering or return all by default
+    filter_key = request.args.get('filter', None)
+    
+    # Collect environment variables for diagnostics
+    env_data = dict(os.environ)
+    
+    # SECURITY VULNERABILITY: Information Disclosure
+    # This endpoint returns all environment variables including potentially
+    # sensitive ones like API keys, credentials, or internal configuration
+    if filter_key:
+        filtered_data = {k: v for k, v in env_data.items() if filter_key.lower() in k.lower()}
+        return jsonify({"diagnostics": filtered_data})
+    
+    return jsonify({"diagnostics": env_data})
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
