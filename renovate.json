@@ -2,6 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:base",
+    "group:allNonMajor",
     ":enableVulnerabilityAlerts",
     ":semanticCommits",
     ":prHourlyLimitNone",
@@ -10,29 +11,58 @@
   "timezone": "Australia/Sydney",
   "schedule": ["at any time"],
   
-  "automerge": true,
+  "automerge": false,
   "automergeType": "pr",
   "platformAutomerge": true,
-  "autoApprove": true,
+  "autoApprove": false,
   
   "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Dependency Updates Dashboard",
+  "dependencyDashboardHeader": "## Dependency Updates Dashboard\n\nThis issue lists all pending dependency updates and their status.",
+  "dependencyDashboardFooter": "This issue is auto-generated and will be updated regularly.",
+  "dependencyDashboardLabels": ["dependencies", "automated-issue"],
   "dependencyDashboardAutoclose": true,
   
   "rangeStrategy": "replace",
   "packageRules": [
     {
-      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
-      "automerge": true
+      "matchUpdateTypes": ["major"],
+      "groupName": "all major dependencies",
+      "automerge": false,
+      "labels": ["major-update"],
+      "addLabels": ["manual-intervention-required"],
+      "customChangelogUrl": "https://github.com/{{depNameSanitized}}/{{depName}}/releases"
+    },
+    {
+      "matchConfidence": ["high", "very high"],
+      "automerge": true,
+      "autoApprove": true
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchConfidence": ["low", "neutral"],
+      "automerge": false,
+      "labels": ["manual-review-required"],
+      "prBodyNotes": ["⚠️ This update has a lower confidence level and requires manual review."]
     },
     {
       "matchDepTypes": ["devDependencies"],
-      "automerge": true
+      "automerge": true,
+      "autoApprove": true
+    },
+    {
+      "matchPackagePatterns": [".*"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "matchCurrentVersion": "/^0\\./",
+      "labels": ["zero-major"]
     }
   ],
 
   "vulnerabilityAlerts": {
-    "labels": ["security"],
-    "assignees": ["@tnh"]
+    "labels": ["security", "vulnerability"],
+    "assignees": ["@tnh"],
+    "prCreation": "immediate",
+    "prBodyNotes": ["🔒 **Security Issue**: This PR addresses a security vulnerability."]
   },
   
   "lockFileMaintenance": {
@@ -44,8 +74,10 @@
     "commitMessageTopic": null,
     "commitMessageExtra": null,
     "schedule": ["at any time"],
-    "groupName": null,
-    "prBodyDefinitions": {"Change": "All locks refreshed"}
+    "groupName": "lock file maintenance",
+    "prBodyDefinitions": {"Change": "All locks refreshed"},
+    "automerge": true,
+    "autoApprove": true
   },
   
   "prCreation": "immediate",
@@ -53,11 +85,27 @@
   "ignoreTests": false,
   
   "ignoreUnstable": true,
-  "separateMajorMinor": false,
+  "separateMajorMinor": true,
   "separateMinorPatch": false,
   "respectLatest": false,
   "assigneesFromCodeOwners": false,
   "reviewersFromCodeOwners": false,
   "ignoreReviewers": ["@tnh", "@amazon-q-developer"],
-  "assignees": []
+  "assignees": ["@tnh"],
+  
+  "mergeConfidenceDatasources": ["go", "maven", "npm", "nuget", "packagist", "pypi", "rubygems"],
+  
+  "configWarningReuseIssue": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  
+  "customizeDashboard": {
+    "dependencyTypeIssues": "# Dependencies requiring manual intervention\n\nThese dependencies have been flagged as requiring manual work and cannot be automatically updated by Renovate.",
+    "majorIssues": "# Major version updates requiring manual testing\n\nThese major updates require more extensive testing and cannot be automerged."
+  },
+  
+  "hostRules": [
+    {
+      "abortOnError": false
+    }
+  ]
 }
