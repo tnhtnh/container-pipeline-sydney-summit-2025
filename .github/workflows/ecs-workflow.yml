@@ -66,20 +66,6 @@ jobs:
         echo "health-check-alarm-arn=${HEALTH_CHECK_ALARM_ARN}" >> $GITHUB_OUTPUT
 
 
-    - name: Deploy FIS 
-      uses: aws-actions/aws-cloudformation-github-deploy@master
-      with:
-        name: fis-stack
-        template: cloudformation/fis.yml
-        capabilities: CAPABILITY_IAM, CAPABILITY_AUTO_EXPAND, CAPABILITY_NAMED_IAM
-        no-fail-on-empty-changeset: "1"
-        parameter-overrides: >-
-          ClusterName="example-cluster",
-          ServiceName="example-service",
-          ExperimentIntervalHours=12,
-          ExperimentDuration="PT15M",
-          StopAlarmArn="${{ steps.ecs-outputs.outputs.health-check-alarm-arn }}"
-
     - name: Print ALB DNS
       run: |
         echo "ALB DNS is ${{ steps.ecs-outputs.outputs.alb-dns }}"
