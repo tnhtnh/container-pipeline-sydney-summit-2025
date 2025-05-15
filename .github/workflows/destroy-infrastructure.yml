@@ -2,8 +2,8 @@ name: Destroy Infrastructure
 
 # Trigger this workflow daily at 2:00 AM UTC
 on:
-  schedule:
-    - cron: '0 2 * * *'  # Adjust the time as needed
+#  schedule:
+#    - cron: '0 2 * * *'  # Adjust the time as needed
   workflow_dispatch:     # Allows manual triggering if needed
 
 permissions:
