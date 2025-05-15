@@ -1,0 +1,135 @@
+name: Build, Push to ECR
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+    outputs:
+      docker-image:
+        description: "The ID of the created docker image"
+        value: ${{ jobs.build-container.outputs.docker-image }}
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'my-ecr-repo' }}
+  CRITICAL_THRESHOLD: ${{ vars.CRITICAL_THRESHOLD || 6 }}
+  HIGH_THRESHOLD: ${{ vars.HIGH_THRESHOLD || 8 }}
+  MEDIUM_THRESHOLD: ${{ vars.MEDIUM_THRESHOLD || 9 }}
+  LOW_THRESHOLD: ${{ vars.LOW_THRESHOLD || 10 }}
+  OTHER_THRESHOLD: ${{ vars.OTHER_THRESHOLD || 20 }}
+
+
+jobs:
+  build-container:
+    runs-on: ubuntu-latest
+    outputs:
+      docker-image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+    timeout-minutes: 60
+    steps:
+      # checkout the repository containing our Dockerfile
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+
+      # Setup prerequisites for docker/build-push-action
+      - name: Set up docker build prereqs (QEMU)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up docker build prereqs (Buildx)
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx
+
+      - name: Display risk thresholds
+        run: |
+          cat <<EOF >> $GITHUB_STEP_SUMMARY
+          # Current configured risk thresholds
+          If the number of vulnerabilities in the image exceeds the threshold for the severity, the workflow will fail.
+          | Severity      | Count                         |
+          |---------------------|------------------------------|
+          | ❌ Critical         | ${{ env.CRITICAL_THRESHOLD }} |
+          | ❗ High             | ${{ env.HIGH_THRESHOLD }}     |
+          | ❓ Medium           | ${{ env.MEDIUM_THRESHOLD }}   |
+          | 🔷 Low              | ${{ env.LOW_THRESHOLD }}      |
+          | 🟡 Other            | ${{ env.OTHER_THRESHOLD }}    |
+          EOF
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OICD_ROLE }}
+          role-session-name: gh-${{ github.repository_id}}-${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}  
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - name: Scan built image with Inspector
+        uses: aws-actions/vulnerability-scan-github-action-for-amazon-inspector@v1
+        id: inspector
+        with:
+          artifact_type: 'container'
+          artifact_path: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}'
+          critical_threshold: ${{ env.CRITICAL_THRESHOLD }}
+          high_threshold: ${{ env.HIGH_THRESHOLD }}
+          medium_threshold: ${{ env.MEDIUM_THRESHOLD }}
+          low_threshold: ${{ env.LOW_THRESHOLD }}
+          other_threshold: ${{ env.OTHER_THRESHOLD }}
+        
+      - name: Display Inspector vulnerability scan results (markdown)
+        run: | 
+          cat ${{ steps.inspector.outputs.inspector_scan_results_markdown }}
+          cat ${{ steps.inspector.outputs.inspector_scan_results_markdown }} >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Scan Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: Uploading scan SBOM results
+          path: |
+            ${{ steps.inspector.outputs.inspector_scan_results }}
+            ${{ steps.inspector.outputs.inspector_scan_results_csv }}
+            ${{ steps.inspector.outputs.artifact_sbom }}
+
+      - name: Fail job if vulnerability threshold is exceeded
+        run: exit ${{ steps.inspector.outputs.vulnerability_threshold_exceeded }}
+
+      - name: Push Docker image
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        continue-on-error: ${{ github.event_name == 'schedule' }}
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache

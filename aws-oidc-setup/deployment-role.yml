@@ -1,0 +1,45 @@
+# Example IAM Role for OIDC deployment from GitHub Actions for repo tnhtnh/container-pipeline-sydney-summit-2025
+# NOTE: This is an example. You should customize RoleName, permissions, and OIDC subject for your environment.
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  EXAMPLE: IAM Role for Deployment via OIDC for repo
+  tnhtnh/container-pipeline-sydney-summit-2025. Customize for your environment.
+
+Parameters:
+  GitHubOIDCSubject:
+    Type: String
+    Description: >-
+      The GitHub OIDC subject claim, e.g.,
+      "repo:tnhtnh/container-pipeline-sydney-summit-2025:*" or
+      "repo:tnhtnh/container-pipeline-sydney-summit-2025:environment:prod".
+      Customize as needed.
+
+Resources:
+  DeploymentRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: DeploymentRole-Example-ContainerPipelineSydneySummit2025  # Example
+        # role name, customize for your org
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+          - Effect: Allow
+            Principal:
+              Federated: '{{resolve:ssm:/account/oidc:1}}'
+            Action:
+              - 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  Ref: GitHubOIDCSubject
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'  # Example: use least
+          # privilege in production

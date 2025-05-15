@@ -1,0 +1,19 @@
+name: Shellcheck
+on:
+  push:
+    paths:
+      - '**/*.sh'
+  pull_request:
+    paths:
+      - '**/*.sh'
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone the repository
+        uses: actions/checkout@v4
+      - name: Run shellcheck
+        uses: ludeeus/action-shellcheck@master
+  

@@ -1,0 +1,69 @@
+name: Deploy VPC
+
+on:
+  workflow_call:
+    outputs:
+      vpc-id:
+        description: "The ID of the created VPC"
+        value: ${{ jobs.deploy-vpc.outputs.vpc-id }}
+      public-subnets:
+        description: "The IDs of the public subnets"
+        value: ${{ jobs.deploy-vpc.outputs.public-subnets }}
+      private-subnets:
+        description: "The IDs of the private subnets"
+        value: ${{ jobs.deploy-vpc.outputs.private-subnets }}
+env:
+  AWS_REGION: ap-southeast-2 
+  VPC_STACK_NAME: vpc-abstraction-stack
+  LANDING_ZONE_NAME: ${{ vars.LANDING_ZONE_NAME }}
+  VPC_NAME: ${{ vars.VPC_NAME }}
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+jobs:
+  deploy-vpc:
+    runs-on: ubuntu-latest
+    outputs:
+      vpc-id: ${{ steps.vpc-outputs.outputs.vpc-id }}
+      public-subnets: ${{ steps.vpc-outputs.outputs.public-subnets }}
+      private-subnets: ${{ steps.vpc-outputs.outputs.private-subnets }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.OICD_ROLE }}
+        role-session-name: gh-${{ github.repository_id}}-${{ github.sha }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy VPC Landingzone Abstraction Stack
+      uses: aws-actions/aws-cloudformation-github-deploy@master
+      with:
+        name: ${{ env.VPC_STACK_NAME }}
+        template: cloudformation/vpc-landingzone-abstraction.yml
+        no-fail-on-empty-changeset: "1"
+        parameter-overrides: >-
+          LandingZoneName="${{ env.LANDING_ZONE_NAME }}",
+          VpcName="${{ env.VPC_NAME }}",
+          NumberOfSubnets=3
+    
+    
+    # - name: Deploy VPC Stack
+    #   uses: aws-actions/aws-cloudformation-github-deploy@master
+    #   with:
+    #     name: ${{ env.VPC_STACK_NAME }}
+    #     template: cloudformation/vpc.yml
+    #     capabilities: CAPABILITY_IAM
+    #     no-fail-on-empty-changeset: "1"
+
+    - name: Get VPC Stack Outputs
+      id: vpc-outputs
+      run: |
+        VPC_ID=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='VpcId'].OutputValue" --output text)
+        PUBLIC_SUBNETS=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='PublicSubnets'].OutputValue" --output text)
+        PRIVATE_SUBNETS=$(aws cloudformation describe-stacks --stack-name ${{ env.VPC_STACK_NAME }} --query "Stacks[0].Outputs[?OutputKey=='PrivateSubnets'].OutputValue" --output text)
+        echo "vpc-id=${VPC_ID}" >> $GITHUB_OUTPUT
+        echo "public-subnets=${PUBLIC_SUBNETS}" >> $GITHUB_OUTPUT
+        echo "private-subnets=${PRIVATE_SUBNETS}" >> $GITHUB_OUTPUT

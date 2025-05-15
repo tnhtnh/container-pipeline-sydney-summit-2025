@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template to capture ECS events and publish them to a CloudWatch Logs log group,
+  and create a dashboard showing events related to Fargate Spot.
+
+Resources:
+
+  # CloudWatch Logs Log Group for ECS events
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/eventbridge/ecs
+      RetentionInDays: 7
+
+  # IAM role for the Lambda function with permissions to write to CloudWatch Logs
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: ecs-event-logger-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ecs-event-logger-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Allow Lambda to write to the specific Log Group
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/eventbridge/ecs:*
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # Lambda function to log ECS events to CloudWatch Logs
+  ECSEventLoggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ecs-event-logger
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import time
+
+          LOG_GROUP_NAME = '/aws/eventbridge/ecs'
+
+          logs_client = boto3.client('logs')
+
+          def lambda_handler(event, context):
+              timestamp = int(time.time() * 1000)
+              log_stream_name = context.aws_request_id
+
+              # Create log stream
+              try:
+                  logs_client.create_log_stream(
+                      logGroupName=LOG_GROUP_NAME,
+                      logStreamName=log_stream_name
+                  )
+              except logs_client.exceptions.ResourceAlreadyExistsException:
+                  pass
+
+              message = json.dumps(event)
+
+              # Initialize kwargs for put_log_events
+              kwargs = {
+                  'logGroupName': LOG_GROUP_NAME,
+                  'logStreamName': log_stream_name,
+                  'logEvents': [
+                      {
+                          'timestamp': timestamp,
+                          'message': message
+                      },
+                  ],
+              }
+
+              # Put log event with error handling for sequence token
+              while True:
+                  try:
+                      response = logs_client.put_log_events(**kwargs)
+                      break  # Exit loop if successful
+                  except logs_client.exceptions.InvalidSequenceTokenException as e:
+                      # Extract the expected sequence token and retry
+                      kwargs['sequenceToken'] = e.response['Error']['Message'].split(' ')[-1]
+                  except Exception as e:
+                      print(f"Error putting log events: {e}")
+                      break
+
+  # EventBridge rule to capture ECS events
+  ECSEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: ecs-event-rule
+      EventPattern:
+        source:
+          - aws.ecs
+      State: ENABLED
+      Targets:
+        - Id: ecs-event-logger
+          Arn: !GetAtt ECSEventLoggerFunction.Arn
+
+  # Permission for EventBridge to invoke the Lambda function
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ECSEventLoggerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ECSEventRule.Arn
+
+  # Metric filter to identify Fargate Spot events
+  FargateNewSpotMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ECSLogGroup
+      FilterPattern: '{ $.detail.capacityProviderName = "FARGATE_SPOT" }'
+      MetricTransformations:
+        - MetricNamespace: ECS/FargateSpot
+          MetricName: FargateNewSpotEventCount
+          MetricValue: "1"
+
+  FargateSpotTerminateMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ECSLogGroup
+      FilterPattern: '{ $.detail.stopCode = "SpotInterruption" }'
+      MetricTransformations:
+        - MetricNamespace: ECS/FargateSpot
+          MetricName: FargateTerminateSpotEventCount
+          MetricValue: "1"
+
+  # CloudWatch Dashboard displaying Fargate Spot events
+  FargateSpotDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: FargateSpotEventsDashboard
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 1,
+              "properties": {
+                "markdown": "# Fargate Spot Events Dashboard"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 1,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "ECS/FargateSpot", "FargateNewSpotEventCount" ]
+                ],
+                "title": "Fargate New Spot Event Count",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "view": "timeSeries",
+                "stacked": false,
+                "fontsize": 12,
+                "start": "-PT1H",
+                "end": "PT0H"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 1,
+              "width": 24,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "ECS/FargateSpot", "FargateTerminateSpotEventCount" ]
+                ],
+                "title": "Fargate Terminated Spot Event Count",
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "view": "timeSeries",
+                "stacked": false,
+                "fontsize": 12,
+                "start": "-PT1H",
+                "end": "PT0H"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  DashboardURL:
+    Description: URL of the CloudWatch Dashboard
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${FargateSpotDashboard}"

@@ -1,0 +1,71 @@
+name: Deploy ECS
+
+on:
+  workflow_call:
+    inputs:
+      vpc-id:
+        required: true
+        type: string
+      public-subnets:
+        required: true
+        type: string
+      private-subnets:
+        required: true
+        type: string
+      docker-image:
+        required: true
+        type: string
+env:
+  AWS_REGION: ap-southeast-2 
+  CONTAINER_NAME: ecs
+
+permissions:
+      id-token: write   # This is required for requesting the JWT
+      contents: read    # This is required for actions/checkout
+jobs:
+  deploy-ecs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.OICD_ROLE }}
+        role-session-name: gh-${{ github.repository_id}}-${{ github.sha }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy ECS Infrastucture
+      uses: aws-actions/aws-cloudformation-github-deploy@master
+      with:
+        name: my-ecs-stack
+        template: cloudformation/ecs.yml
+        capabilities: CAPABILITY_IAM, CAPABILITY_AUTO_EXPAND
+        no-fail-on-empty-changeset: "1"
+        parameter-overrides: >-
+          Name="example",
+          ContainerImage=${{ inputs.docker-image }},
+          MinContainers=1,
+          DesiredContainers=4,
+          MaxContainers=10,
+          TaskSize=tiny
+
+
+    - name: Get ECS Stack Outputs
+      id: ecs-outputs
+      run: |
+        ALB_DNS=$(aws cloudformation describe-stacks --stack-name my-ecs-stack --query "Stacks[0].Outputs[?OutputKey=='ALBDNSName'].OutputValue" --output text)
+        ECS_CLUSTER_ARN=$(aws cloudformation describe-stacks --stack-name my-ecs-stack --query "Stacks[0].Outputs[?OutputKey=='ECSClusterARN'].OutputValue" --output text)
+        HEALTH_CHECK_ALARM_ARN=$(aws cloudformation describe-stacks --stack-name my-ecs-stack --query "Stacks[0].Outputs[?OutputKey=='HealthCheckAlarmArn'].OutputValue" --output text)
+        echo "Application is accessible at: http://${ALB_DNS}"
+        echo "Cluster ARN is ${ECS_CLUSTER_ARN}"
+        echo "The ARN of the health check alarm is ${HEALTH_CHECK_ALARM_ARN}"
+        echo "alb-dns=${ALB_DNS}" >> $GITHUB_OUTPUT
+        echo "cluster-arn=${ECS_CLUSTER_ARN}" >> $GITHUB_OUTPUT
+        echo "health-check-alarm-arn=${HEALTH_CHECK_ALARM_ARN}" >> $GITHUB_OUTPUT
+
+
+    - name: Print ALB DNS
+      run: |
+        echo "ALB DNS is ${{ steps.ecs-outputs.outputs.alb-dns }}"

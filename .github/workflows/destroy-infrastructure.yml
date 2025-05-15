@@ -1,0 +1,104 @@
+name: Destroy Infrastructure
+
+# Trigger this workflow daily at 2:00 AM UTC
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Adjust the time as needed
+  workflow_dispatch:     # Allows manual triggering if needed
+
+permissions:
+  id-token: write
+  contents: read
+  # Add additional permissions if required
+
+env:
+  AWS_REGION: ap-southeast-2  # Ensure this matches your deployment region
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository (optional if not needed)
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Configure AWS Credentials for Initial Role
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OICD_ROLE }}  # Ensure this secret has permissions to delete stacks
+          role-session-name: destroy-session-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+   
+
+      - name: Delete ECR Repositories and Images
+        run: |
+            # Replace 'my-ecr-repo' with your ECR repository name
+            ECR_REPO="${{ env.ECR_REPOSITORY }}"
+
+            # Check if the repository exists
+            if aws ecr describe-repositories --repository-names "$ECR_REPO" &>/dev/null; then
+                echo "Deleting all images in ECR repository: $ECR_REPO"
+                # Delete all images in the repository
+                IMAGE_IDS=$(aws ecr list-images --repository-name "$ECR_REPO" --query 'imageIds[*]' --output json)
+                if [ "$(echo $IMAGE_IDS | jq length)" -gt 0 ]; then
+                aws ecr batch-delete-image --repository-name "$ECR_REPO" --image-ids "$IMAGE_IDS"
+                fi
+            fi
+  
+      # Step 4: Delete CloudFormation Stacks
+      - name: Delete CloudFormation Stacks
+        run: |
+          # List of stacks to delete in reverse order of creation to respect dependencies
+          STACKS=(
+            my-ecs-stack
+            fis-stack
+            my-ecs-fargate-logs
+            my-ecr-repo
+            codeguru-s3-bucket-stack
+            my-vpc-stack
+          )
+
+          for STACK in "${STACKS[@]}"; do
+            echo "Attempting to delete stack: $STACK"
+            aws cloudformation delete-stack --stack-name "$STACK"
+
+            echo "Waiting for stack $STACK deletion to complete..."
+            # Wait until the stack is deleted
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+
+            if [ $? -eq 0 ]; then
+              echo "Successfully deleted stack: $STACK"
+            else
+              echo "Failed to delete stack: $STACK or stack does not exist."
+              # Optionally, you can choose to exit or continue based on your preference
+              # exit 1
+            fi
+          done
+
+      # Step 5: Cleanup ECR Repositories and Images (Optional)
+      - name: Delete ECR Repositories and Images
+        run: |
+          # Replace 'my-ecr-repo' with your ECR repository name
+          ECR_REPO="${{ env.ECR_REPOSITORY }}"
+
+          # Check if the repository exists
+          if aws ecr describe-repositories --repository-names "$ECR_REPO" &>/dev/null; then
+            echo "Deleting all images in ECR repository: $ECR_REPO"
+            # Delete all images in the repository
+            IMAGE_IDS=$(aws ecr list-images --repository-name "$ECR_REPO" --query 'imageIds[*]' --output json)
+            if [ "$(echo $IMAGE_IDS | jq length)" -gt 0 ]; then
+              aws ecr batch-delete-image --repository-name "$ECR_REPO" --image-ids "$IMAGE_IDS"
+            fi
+
+            echo "Deleting ECR repository: $ECR_REPO"
+            aws ecr delete-repository --repository-name "$ECR_REPO" --force
+          else
+            echo "ECR repository $ECR_REPO does not exist or already deleted."
+          fi
+
+      # Step 6: Notify Completion (Optional)
+      - name: Notify Completion
+        run: echo "Infrastructure destruction completed."
