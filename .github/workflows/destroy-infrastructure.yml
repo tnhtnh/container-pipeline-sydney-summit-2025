@@ -56,7 +56,7 @@ jobs:
             my-ecs-stack
             fis-stack
             my-ecs-fargate-logs
-            my-ecr-repo
+            ecr-repo-${{ env.ECR_REPOSITORY }}
             codeguru-s3-bucket-stack
             my-vpc-stack
           )
@@ -93,8 +93,6 @@ jobs:
               aws ecr batch-delete-image --repository-name "$ECR_REPO" --image-ids "$IMAGE_IDS"
             fi
 
-            echo "Deleting ECR repository: $ECR_REPO"
-            aws ecr delete-repository --repository-name "$ECR_REPO" --force
           else
             echo "ECR repository $ECR_REPO does not exist or already deleted."
           fi
