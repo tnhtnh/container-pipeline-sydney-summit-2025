@@ -58,6 +58,51 @@ def test_summit_endpoint(client):
     assert data == {"message": "I hope you are enjoying this talk"}
 
 @patch('subprocess.check_output')
+def test_ping_endpoint_normal_use(mock_check_output, client):
+    """
+    Test the ping endpoint with a normal hostname.
+    """
+    # Mock subprocess output
+    mock_output = "PING localhost (127.0.0.1): 56 data bytes\n64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.037 ms"
+    mock_check_output.return_value = mock_output
+    
+    # Make request to ping endpoint with normal hostname
+    response = client.get('/ping?hostname=localhost')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Parse response data
+    data = json.loads(response.data)
+    
+    # Verify response content
+    assert data == {"output": mock_output}
+    
+    # Verify subprocess was called with expected command
+    mock_check_output.assert_called_once_with("ping -c 1 localhost", shell=True, text=True)
+
+@patch('subprocess.check_output')
+def test_ping_endpoint_command_injection(mock_check_output, client):
+    """
+    Test that demonstrates the command injection vulnerability in the ping endpoint.
+    """
+    # Mock subprocess output
+    mock_check_output.return_value = "injected command output"
+    
+    # Prepare a malicious input that attempts command injection
+    malicious_input = "localhost && ls -la"
+    
+    # Make request to ping endpoint with malicious input
+    response = client.get(f'/ping?hostname={malicious_input}')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Verify subprocess was called with the injected command
+    expected_command = f"ping -c 1 {malicious_input}"
+    mock_check_output.assert_called_once_with(expected_command, shell=True, text=True)
+
+@patch('subprocess.check_output')
 def test_run_command_endpoint(mock_check_output, client):
     """
     Test the vulnerable command injection endpoint.
