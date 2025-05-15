@@ -2,7 +2,7 @@ import os
 import pytest
 import json
 from app import app as flask_app
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 @pytest.fixture
 def app():
@@ -110,3 +110,64 @@ def test_run_command_injection_scenario(mock_check_output, client):
     
     # Verify that subprocess was called with the malicious command
     mock_check_output.assert_called_once_with(malicious_command, shell=True, text=True)
+
+@patch('requests.get')
+def test_fetch_url_endpoint(mock_get, client):
+    """
+    Test the vulnerable SSRF endpoint.
+    This test mocks requests.get to avoid actually making HTTP requests.
+    """
+    # Create a mock response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "<html><body>Example response</body></html>"
+    mock_get.return_value = mock_response
+    
+    # Prepare the test data with a simple URL
+    test_data = {"url": "https://example.com"}
+    
+    # Make the request to the vulnerable endpoint
+    response = client.post('/fetch_url', 
+                          json=test_data,
+                          content_type='application/json')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Parse response data
+    data = json.loads(response.data)
+    
+    # Verify response content
+    assert data["status_code"] == 200
+    assert data["content"] == "<html><body>Example response</body></html>"
+    
+    # Verify that requests.get was called with the expected URL
+    mock_get.assert_called_once_with("https://example.com")
+
+@patch('requests.get')
+def test_fetch_url_ssrf_scenario(mock_get, client):
+    """
+    Test that demonstrates the potential SSRF vulnerability.
+    This test shows how internal resources could be accessed via the SSRF vulnerability.
+    """
+    # Create a mock response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.text = "AWS metadata content"
+    mock_get.return_value = mock_response
+    
+    # Prepare test data with a URL that could access AWS instance metadata
+    # This would be caught by security scanners
+    internal_url = "http://169.254.169.254/latest/meta-data/"
+    test_data = {"url": internal_url}
+    
+    # Make the request to the vulnerable endpoint
+    response = client.post('/fetch_url', 
+                          json=test_data,
+                          content_type='application/json')
+    
+    # Check status code
+    assert response.status_code == 200
+    
+    # Verify that requests.get was called with the internal URL
+    mock_get.assert_called_once_with(internal_url)
