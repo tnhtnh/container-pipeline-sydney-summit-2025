@@ -10,7 +10,6 @@ This project showcases a complete CI/CD pipeline for deploying containerized app
 - **ECS Fargate** for running containerized applications without managing servers
 - **GitHub Actions** with AWS OIDC integration for secure deployments
 - **CloudFormation** templates for infrastructure as code
-- **Amazon EFS** integration for persistent storage
 - **Auto-scaling** based on CPU and memory metrics
 - **Load balancing** with Application Load Balancer
 - **Health monitoring** with CloudWatch alarms and Route53 health checks
