@@ -2,7 +2,7 @@ name: Deploy Infrastructure
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # Runs at 12:00 PM AEST
+    - cron: '0 * * * *'  # Runs every hour
   push:
     branches: [ main ]
   workflow_dispatch:
