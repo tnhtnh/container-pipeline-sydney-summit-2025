@@ -1,4 +1,4 @@
-FROM python:3.5.0b3-slim AS builder
+FROM python:3.9-slim-bullseye AS builder
 
 WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
@@ -6,7 +6,7 @@ COPY app.py test_app.py ./
 RUN pip install --no-cache-dir -r requirements-dev.txt
 RUN pytest test_app.py
 
-FROM python:3.5.0b3-slim
+FROM python:3.9-slim-bullseye
 RUN apt-get update && apt-get install -y curl
 
 WORKDIR /app
