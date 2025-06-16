@@ -1,20 +1,16 @@
-FROM python:3.13-slim-bullseye AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
-COPY requirements.txt requirements-dev.txt ./
-COPY app.py test_app.py ./
-RUN pip install --no-cache-dir -r requirements-dev.txt
-RUN pytest test_app.py
+COPY go.mod main.go main_test.go ./
+RUN go test -v ./...
+RUN go build -o app .
 
-FROM python:3.13-slim-bullseye
-RUN apt-get update && apt-get install -y curl
+FROM alpine:latest
+RUN apk --no-cache add curl
 
 WORKDIR /app
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=builder /app/app .
 
-# Copy only app.py from builder stage (forces builder to succeed)
-COPY --from=builder /app/app.py ./
 ARG GIT_SHA=unknown
 ENV GIT_SHA=$GIT_SHA
 
@@ -28,4 +24,4 @@ LABEL description="Example container with AWS Inspector scanning"
 
 EXPOSE 80
 
-CMD ["python", "app.py"]
+CMD ["./app"]

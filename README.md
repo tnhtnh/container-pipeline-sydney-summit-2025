@@ -1,7 +1,7 @@
 # AWS ECS Deployment Demo
 
 ## Overview
-This repository contains an example project for Trent Hornibrook's talk at AWS Sydney Summit 2025. It demonstrates modern deployment patterns for containerized applications on AWS using ECS Fargate, GitHub Actions, and infrastructure as code with CloudFormation.
+This repository contains an example project for Trent Hornibrook's talk at AWS Sydney Summit 2025. It demonstrates modern deployment patterns for containerized applications on AWS using ECS Fargate, GitHub Actions, and infrastructure as code with CloudFormation. The application is written in Go.
 
 ## Architecture
 
@@ -25,6 +25,10 @@ This project showcases a complete CI/CD pipeline for deploying containerized app
   - `fis.yml`: Fault Injection Simulator configuration
   - `ecs-fargate-logs.yml`: Log configuration for Fargate tasks
   - `codeguru-bucket.yml`: S3 bucket setup for AWS CodeGuru
+- `main.go`: Go application with endpoints for showing git SHA and health check
+- `main_test.go`: Go tests to verify application functionality
+- `go.mod`: Go module definition
+- `Dockerfile`: Container setup with git SHA build argument support
 
 ## Getting Started
 
@@ -32,6 +36,7 @@ This project showcases a complete CI/CD pipeline for deploying containerized app
 - AWS CLI configured with appropriate permissions
 - GitHub account with repository secrets configured
 - Docker installed locally for container testing
+- Go 1.22 or later for local development
 
 ### Setting up OIDC Trust
 
