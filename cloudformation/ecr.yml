@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'ECR Repository with Lifecycle Policy and Security Features'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECR Repository with Lifecycle Policy and Security Features"
 
 Parameters:
   RepositoryName:
@@ -56,6 +56,88 @@ Resources:
               - "ecr:InitiateLayerUpload"
               - "ecr:UploadLayerPart"
               - "ecr:CompleteLayerUpload"
+
+  # IAM Role for the Lambda function
+  ECRCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:ListImages
+                  - ecr:BatchDeleteImage
+                  - ecr:DescribeRepositories
+                Resource: !GetAtt ECRRepository.Arn
+
+  # Lambda function to clean up ECR images
+  ECRCleanupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt ECRCleanupLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+          import os
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def handler(event, context):
+              logger.info('Received event: %s', event)
+              
+              # Get the repository name from the event
+              repository_name = event['ResourceProperties']['RepositoryName']
+              
+              try:
+                  # Only perform cleanup on delete
+                  if event['RequestType'] == 'Delete':
+                      logger.info(f'Cleaning up images in repository {repository_name}')
+                      ecr = boto3.client('ecr')
+                      
+                      # List all images in the repository
+                      response = ecr.list_images(repositoryName=repository_name)
+                      
+                      # If there are images, delete them
+                      if 'imageIds' in response and response['imageIds']:
+                          logger.info(f'Deleting {len(response["imageIds"])} images')
+                          ecr.batch_delete_image(
+                              repositoryName=repository_name,
+                              imageIds=response['imageIds']
+                          )
+                          logger.info('Images deleted successfully')
+                      else:
+                          logger.info('No images to delete')
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  logger.error(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # Custom resource to trigger the Lambda function
+  ECRCleanupTrigger:
+    Type: Custom::ECRCleanup
+    Properties:
+      ServiceToken: !GetAtt ECRCleanupFunction.Arn
+      RepositoryName: !Ref RepositoryName
+    DependsOn: ECRRepository
 
 Outputs:
   RepositoryUri:
