@@ -24,7 +24,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository and provide your AWS credentials
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
         
