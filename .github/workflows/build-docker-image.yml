@@ -108,7 +108,7 @@ jobs:
           cat ${{ steps.inspector.outputs.inspector_scan_results_markdown }} >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Scan Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Uploading scan SBOM results
           path: |
