@@ -64,7 +64,7 @@ jobs:
 
       - name: Upload the sarif file to Artifacts
         if: steps.codeguru.outputs.bucket_found == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: codeguru-results.sarif.json
           path: codeguru-results.sarif.json
