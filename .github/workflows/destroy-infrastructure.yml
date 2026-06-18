@@ -22,7 +22,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository (optional if not needed)
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Step 2: Configure AWS Credentials for Initial Role
       - name: Configure AWS Credentials
